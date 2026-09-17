@@ -291,8 +291,8 @@ const ArtistsPage = () => {
             /* Empty State */
             <div className="max-w-5xl mx-auto pt-8 pb-4 md:py-12">
               {/* Become a Verified Artist Card */}
-              <div className="relative bg-[#0A0A0A] rounded-[24px] p-8 sm:p-12 lg:p-16 shadow-2xl hover:scale-[1.01] transition-transform duration-300 ease-out overflow-hidden text-left">
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[20%] opacity-[0.08] z-0">
+              <div className="relative bg-[#0A0A0A] rounded-[24px] p-8 sm:p-12 lg:p-16 shadow-2xl hover:scale-[1.01] transition-transform duration-300 ease-out overflow-hidden text-left border border-white/10">
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[20%] opacity-[0.08] z-0 pointer-events-none">
                   <UserCheck 
                     size={280} 
                     className="text-red-600 sm:w-64 sm:h-64 lg:w-80 lg:h-80"
@@ -313,9 +313,9 @@ const ArtistsPage = () => {
                   {/* Left Column: Title, description, stats, CTA */}
                   <div className="lg:col-span-7 flex flex-col justify-center">
                     <div className="mb-6 inline-block">
-                      <span className="inline-flex items-center px-4 py-2 bg-red-500 text-white text-xs font-bold rounded-full tracking-wider uppercase">
+                      <span className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-full tracking-wider uppercase shadow-md shadow-red-600/30">
                         <span className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse" />
-                        join as the member
+                        GET HIRED &amp; GET DISCOVERED
                       </span>
                     </div>
 
@@ -323,13 +323,13 @@ const ArtistsPage = () => {
                       <span className="block text-3xl sm:text-4xl lg:text-5xl">
                         BECOME A
                       </span>
-                      <span className="block text-3xl sm:text-4xl lg:text-5xl text-brand">
+                      <span className="block text-3xl sm:text-4xl lg:text-5xl text-red-600">
                         VERIFIED ARTIST
                       </span>
                     </h1>
 
-                    <p className="text-gray-400 text-sm sm:text-base lg:text-lg max-w-lg mb-8 leading-relaxed font-medium">
-                      Join {artistCount || 265}+ verified professionals and get high-quality client leads with zero commission.
+                    <p className="text-gray-300 text-sm sm:text-base lg:text-lg max-w-lg mb-8 leading-relaxed font-medium">
+                      Get hired &amp; get discovered! Join {artistCount && artistCount > 286 ? artistCount : 286}+ talented artists &amp; verified professionals to get high-quality client leads with zero commission.
                     </p>
 
                     <div className="flex gap-4 sm:gap-6 mb-8 flex-wrap">
@@ -345,7 +345,7 @@ const ArtistsPage = () => {
 
                     <button 
                       onClick={() => navigate('/artist-hub')}
-                      className="group inline-flex items-center gap-2 bg-red-600 text-white px-8 py-4 font-bold rounded-2xl hover:bg-red-700 transition-all duration-200 shadow-lg shadow-red-600/20 active:scale-95 w-fit"
+                      className="group inline-flex items-center gap-2 bg-red-600 text-white px-8 py-4 font-bold rounded-2xl hover:bg-red-700 transition-all duration-200 shadow-lg shadow-red-600/30 active:scale-95 w-fit"
                     >
                       <span>REGISTER PROFILE</span>
                       <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
@@ -359,8 +359,8 @@ const ArtistsPage = () => {
                     </h3>
                     <ul className="space-y-4">
                       <li className="flex items-start gap-3">
-                        <div className="w-5 h-5 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center mt-0.5 flex-shrink-0">
-                          <Check size={12} className="text-brand" />
+                        <div className="w-6 h-6 rounded-full bg-red-600/20 border border-red-500/50 flex items-center justify-center mt-0.5 flex-shrink-0">
+                          <Check size={14} className="text-red-500 font-bold" />
                         </div>
                         <div>
                           <p className="text-white font-bold text-sm sm:text-base leading-snug">Personalized Portfolio</p>
@@ -368,8 +368,8 @@ const ArtistsPage = () => {
                         </div>
                       </li>
                       <li className="flex items-start gap-3">
-                        <div className="w-5 h-5 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center mt-0.5 flex-shrink-0">
-                          <Check size={12} className="text-brand" />
+                        <div className="w-6 h-6 rounded-full bg-red-600/20 border border-red-500/50 flex items-center justify-center mt-0.5 flex-shrink-0">
+                          <Check size={14} className="text-red-500 font-bold" />
                         </div>
                         <div>
                           <p className="text-white font-bold text-sm sm:text-base leading-snug">Access to Search</p>
@@ -377,17 +377,17 @@ const ArtistsPage = () => {
                         </div>
                       </li>
                       <li className="flex items-start gap-3">
-                        <div className="w-5 h-5 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center mt-0.5 flex-shrink-0">
-                          <Check size={12} className="text-brand" />
+                        <div className="w-6 h-6 rounded-full bg-red-600/20 border border-red-500/50 flex items-center justify-center mt-0.5 flex-shrink-0">
+                          <Check size={14} className="text-red-500 font-bold" />
                         </div>
                         <div>
-                          <p className="text-white font-bold text-sm sm:text-base leading-snug">Upload & Post Art</p>
+                          <p className="text-white font-bold text-sm sm:text-base leading-snug">Upload &amp; Post Art</p>
                           <p className="text-gray-400 text-xs sm:text-sm mt-0.5 leading-normal font-medium">Share your gallery and update your portfolio anytime.</p>
                         </div>
                       </li>
                       <li className="flex items-start gap-3">
-                        <div className="w-5 h-5 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center mt-0.5 flex-shrink-0">
-                          <Check size={12} className="text-brand" />
+                        <div className="w-6 h-6 rounded-full bg-red-600/20 border border-red-500/50 flex items-center justify-center mt-0.5 flex-shrink-0">
+                          <Check size={14} className="text-red-500 font-bold" />
                         </div>
                         <div>
                           <p className="text-white font-bold text-sm sm:text-base leading-snug">Direct Fan Messages</p>
@@ -395,8 +395,8 @@ const ArtistsPage = () => {
                         </div>
                       </li>
                       <li className="flex items-start gap-3">
-                        <div className="w-5 h-5 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center mt-0.5 flex-shrink-0">
-                          <Check size={12} className="text-brand" />
+                        <div className="w-6 h-6 rounded-full bg-red-600/20 border border-red-500/50 flex items-center justify-center mt-0.5 flex-shrink-0">
+                          <Check size={14} className="text-red-500 font-bold" />
                         </div>
                         <div>
                           <p className="text-white font-bold text-sm sm:text-base leading-snug">Connect with Artists</p>
@@ -498,7 +498,7 @@ const ArtistsPage = () => {
         {/* Coming Soon Art Marketplace Section */}
         {/* {!search.trim() && <ComingSoonBanner />} */}
 
-        <Cards hideBecomeVerifiedArtist={true} />
+        <Cards hideBecomeVerifiedArtist={false} />
 
         <Footer />
         <Chatbot />

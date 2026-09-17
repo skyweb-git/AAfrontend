@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingBag, Calculator } from 'lucide-react';
+import { ShoppingBag, Calculator, UserCheck, ArrowRight, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const Cards = ({ hideArtSupplyStore, hideBecomeVerifiedArtist }) => {
@@ -7,6 +7,127 @@ const Cards = ({ hideArtSupplyStore, hideBecomeVerifiedArtist }) => {
   return (
     <section className="bg-[#f8f9fa] py-8 md:py-16 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-5xl mx-auto">
+        
+        {/* Row 1 - Become a Verified Artist Card (if not hidden) */}
+        {!hideBecomeVerifiedArtist && (
+          <div className="mb-8 md:mb-12 relative bg-[#0A0A0A] rounded-[24px] p-8 sm:p-12 lg:p-16 shadow-2xl hover:scale-[1.01] transition-transform duration-300 ease-out overflow-hidden text-left border border-white/10">
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[20%] opacity-[0.08] z-0 pointer-events-none">
+              <UserCheck 
+                size={280} 
+                className="text-red-600 sm:w-64 sm:h-64 lg:w-80 lg:h-80"
+              />
+            </div>
+
+            <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-red-900/20 pointer-events-none z-0" />
+            
+            <div 
+              className="absolute inset-0 opacity-[0.03] pointer-events-none z-0"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`
+              }}
+            />
+
+            <div className="relative z-10 grid lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+              
+              {/* Left Column */}
+              <div className="lg:col-span-7 flex flex-col justify-center">
+                <div className="mb-6 inline-block">
+                  <span className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-full tracking-wider uppercase shadow-md shadow-red-600/30">
+                    <span className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse" />
+                    GET HIRED &amp; GET DISCOVERED
+                  </span>
+                </div>
+
+                <h1 className="text-white font-extrabold leading-tight mb-6 uppercase tracking-tight">
+                  <span className="block text-3xl sm:text-4xl lg:text-5xl">
+                    BECOME A
+                  </span>
+                  <span className="block text-3xl sm:text-4xl lg:text-5xl text-red-600">
+                    VERIFIED ARTIST
+                  </span>
+                </h1>
+
+                <p className="text-gray-300 text-sm sm:text-base lg:text-lg max-w-lg mb-8 leading-relaxed font-medium">
+                  Get hired &amp; get discovered! Join 286+ talented artists &amp; verified professionals to get high-quality client leads with zero commission.
+                </p>
+
+                <div className="flex gap-4 sm:gap-6 mb-8 flex-wrap">
+                  <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl min-w-[120px] backdrop-blur-sm">
+                    <div className="text-2xl font-black text-white">₹1000</div>
+                    <div className="text-[10px] font-bold text-gray-400 tracking-wider">LIFETIME</div>
+                  </div>
+                  <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl min-w-[120px] backdrop-blur-sm">
+                    <div className="text-2xl font-black text-white">0%</div>
+                    <div className="text-[10px] font-bold text-gray-400 tracking-wider">COMMISSION</div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => navigate('/artist-hub')}
+                  className="group inline-flex items-center gap-2 bg-red-600 text-white px-8 py-4 font-bold rounded-2xl hover:bg-red-700 transition-all duration-200 shadow-lg shadow-red-600/30 active:scale-95 w-fit"
+                >
+                  <span>REGISTER PROFILE</span>
+                  <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+
+              {/* Right Column: Member Perks */}
+              <div className="lg:col-span-5 bg-white/[0.03] border border-white/10 rounded-3xl p-6 sm:p-8 backdrop-blur-md">
+                <h3 className="text-white font-extrabold text-lg sm:text-xl mb-6 tracking-wide uppercase">
+                  Member Perks
+                </h3>
+                <ul className="space-y-4">
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-red-600/20 border border-red-500/50 flex items-center justify-center mt-0.5 flex-shrink-0">
+                      <Check size={14} className="text-red-500 font-bold" />
+                    </div>
+                    <div>
+                      <p className="text-white font-bold text-sm sm:text-base leading-snug">Personalized Portfolio</p>
+                      <p className="text-gray-400 text-xs sm:text-sm mt-0.5 leading-normal font-medium">Showcase your creative masterpieces on a dedicated page.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-red-600/20 border border-red-500/50 flex items-center justify-center mt-0.5 flex-shrink-0">
+                      <Check size={14} className="text-red-500 font-bold" />
+                    </div>
+                    <div>
+                      <p className="text-white font-bold text-sm sm:text-base leading-snug">Access to Search</p>
+                      <p className="text-gray-400 text-xs sm:text-sm mt-0.5 leading-normal font-medium">Get discovered by buyers looking for custom artwork.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-red-600/20 border border-red-500/50 flex items-center justify-center mt-0.5 flex-shrink-0">
+                      <Check size={14} className="text-red-500 font-bold" />
+                    </div>
+                    <div>
+                      <p className="text-white font-bold text-sm sm:text-base leading-snug">Upload &amp; Post Art</p>
+                      <p className="text-gray-400 text-xs sm:text-sm mt-0.5 leading-normal font-medium">Share your gallery and update your portfolio anytime.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-red-600/20 border border-red-500/50 flex items-center justify-center mt-0.5 flex-shrink-0">
+                      <Check size={14} className="text-red-500 font-bold" />
+                    </div>
+                    <div>
+                      <p className="text-white font-bold text-sm sm:text-base leading-snug">Direct Fan Messages</p>
+                      <p className="text-gray-400 text-xs sm:text-sm mt-0.5 leading-normal font-medium">Receive direct inquiries and notes from fans and clients.</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-red-600/20 border border-red-500/50 flex items-center justify-center mt-0.5 flex-shrink-0">
+                      <Check size={14} className="text-red-500 font-bold" />
+                    </div>
+                    <div>
+                      <p className="text-white font-bold text-sm sm:text-base leading-snug">Connect with Artists</p>
+                      <p className="text-gray-400 text-xs sm:text-sm mt-0.5 leading-normal font-medium">Interact and network with fellow verified professionals.</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+            </div>
+          </div>
+        )}
         
         {/* Row 2 - Art Value Calculator & Art Supply Store (2 Columns) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 mb-8 md:mb-12">
