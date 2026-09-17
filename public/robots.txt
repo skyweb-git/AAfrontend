@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /signup
+Disallow: /product-management
+Disallow: /event-management
+Disallow: /profile
+Disallow: /api/
+
+Sitemap: https://artartist.com/sitemap.xml
