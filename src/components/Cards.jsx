@@ -48,7 +48,7 @@ const Cards = ({ hideArtSupplyStore, hideBecomeVerifiedArtist }) => {
                 </h1>
 
                 <p className="text-gray-300 text-sm sm:text-base lg:text-lg max-w-lg mb-8 leading-relaxed font-medium">
-                  Get hired &amp; get discovered! Join 286+ talented artists &amp; verified professionals to get high-quality client leads with zero commission.
+                  Get hired &amp; get discovered! Join a growing community of talented artists &amp; verified professionals. Get high-quality client leads with zero commission.
                 </p>
 
                 <div className="flex gap-4 sm:gap-6 mb-8 flex-wrap">
