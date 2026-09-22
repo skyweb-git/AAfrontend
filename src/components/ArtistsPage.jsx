@@ -498,7 +498,7 @@ const ArtistsPage = () => {
         {/* Coming Soon Art Marketplace Section */}
         {/* {!search.trim() && <ComingSoonBanner />} */}
 
-        <Cards hideBecomeVerifiedArtist={false} />
+        <Cards hideBecomeVerifiedArtist={true} />
 
         <Footer />
         <Chatbot />
