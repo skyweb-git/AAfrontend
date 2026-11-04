@@ -468,4 +468,32 @@ export const adminAPI = {
   },
 };
 
+// Coupons API
+export const couponsAPI = {
+  validateCoupon: async (code, amount, category = 'all', email = '', eventId = '') => {
+    const response = await api.post('/coupons/validate', { code, amount, category, email, eventId });
+    return response.data;
+  },
+  applyCoupon: async (payload) => {
+    const response = await api.post('/coupons/apply', payload);
+    return response.data;
+  },
+};
+
+// E-Commerce Purchase API
+export const ecommerceAPI = {
+  createPurchaseSession: async (data) => {
+    const response = await api.post('/ecommerce/purchase/create-session', data);
+    return response.data;
+  },
+  verifyPurchaseSession: async (orderId) => {
+    const response = await api.post('/ecommerce/purchase/verify-session', { orderId });
+    return response.data;
+  },
+  getArtistSales: async (artistId, params = {}) => {
+    const response = await api.get(`/ecommerce/artist/${artistId}/sales`, { params });
+    return response.data;
+  },
+};
+
 export default api;

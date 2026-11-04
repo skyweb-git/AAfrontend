@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Instagram, Facebook, Globe, MapPin, Palette, Heart, ExternalLink, Share2, Briefcase } from 'lucide-react';
+import { ArrowLeft, Instagram, Facebook, Globe, MapPin, Palette, Heart, ExternalLink, Share2, Briefcase, ShoppingBag, Store, IndianRupee } from 'lucide-react';
 import Navbar from './Navbar';
-import { artistsAPI, productsAPI } from '../services/api';
+import { artistsAPI, productsAPI, ecommerceAPI } from '../services/api';
 import SEO from './SEO';
 import Loader from './Loader';
 import MessageModal from './MessageModal';
@@ -18,6 +18,24 @@ const ArtistProfile = () => {
   const [likedArtworks, setLikedArtworks] = useState(new Set());
   const [previewImage, setPreviewImage] = useState(null);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  // Cashfree E-Commerce Buy Modal State
+  const [buyModal, setBuyModal] = useState({ open: false, artwork: null });
+  const [buyForm, setBuyForm] = useState({ name: '', email: '', phone: '', address: '' });
+  const [buyLoading, setBuyLoading] = useState(false);
+  const [buyError, setBuyError] = useState('');
+
+  // Dynamically load Cashfree SDK
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const fetchArtistAndArtworks = async () => {
@@ -192,6 +210,66 @@ const ArtistProfile = () => {
     setIsMessageModalOpen(true);
   };
 
+  const handleBuyArtwork = (e, artwork) => {
+    e.stopPropagation();
+    // If artwork has no price set, but has external payment link, open external link
+    if ((!artwork.price || artwork.price <= 0) && (artwork.paymentLink || artist?.ecommercePayment?.paymentLink)) {
+      window.open(artwork.paymentLink || artist?.ecommercePayment?.paymentLink, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setBuyError('');
+    setBuyForm({ name: '', email: '', phone: '', address: '' });
+    setBuyModal({ open: true, artwork });
+  };
+
+  const handleBuySubmit = async (e) => {
+    e.preventDefault();
+    if (!buyModal.artwork) return;
+    if (!buyForm.name.trim() || !buyForm.email.trim() || !buyForm.phone.trim()) {
+      setBuyError('Full Name, Email, and Phone number are required.');
+      return;
+    }
+    setBuyLoading(true);
+    setBuyError('');
+
+    try {
+      const res = await ecommerceAPI.createPurchaseSession({
+        productId: buyModal.artwork._id || buyModal.artwork.id,
+        artistId: artist._id || artist.id,
+        buyerName: buyForm.name.trim(),
+        buyerEmail: buyForm.email.trim(),
+        buyerPhone: buyForm.phone.trim(),
+        shippingAddress: { street: buyForm.address.trim(), country: 'India' }
+      });
+
+      if (res && res.paymentSessionId) {
+        if (typeof window.Cashfree === 'undefined') {
+          setBuyError('Cashfree gateway is loading, please try again in a moment.');
+          setBuyLoading(false);
+          return;
+        }
+
+        const cashfree = window.Cashfree({
+          mode: res.environment === 'PRODUCTION' ? 'production' : 'sandbox'
+        });
+
+        cashfree.checkout({
+          paymentSessionId: res.paymentSessionId,
+          returnUrl: `${window.location.origin}/ecommerce-success?order_id=${res.orderId}&product=${encodeURIComponent(buyModal.artwork.name || '')}&artist=${encodeURIComponent(artist.name || '')}`
+        });
+
+        setBuyModal({ open: false, artwork: null });
+      } else {
+        setBuyError(res?.error || 'Failed to initialize payment.');
+      }
+    } catch (err) {
+      console.error('Buy artwork error:', err);
+      setBuyError(err?.response?.data?.error || err.message || 'Payment failed. Please try again.');
+    } finally {
+      setBuyLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <>
@@ -306,6 +384,12 @@ const ArtistProfile = () => {
                         <MapPin size={16} className="text-gray-400" />
                         <span>{[artist.location?.city, artist.location?.state, artist.location?.country].filter(Boolean).join(', ') || artist.city || 'India'}</span>
                       </div>
+                      {artist.isEcommerceSeller && (
+                        <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                          <Store size={15} className="text-emerald-600" />
+                          <span className="font-semibold text-xs">Official E-Commerce Store</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -449,8 +533,16 @@ const ArtistProfile = () => {
                         )}
                       </div>
                       <div className="p-5">
-                        <h3 className="text-lg font-black text-gray-900 mb-4">{artwork.name || artwork.title || 'Untitled'}</h3>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <h3 className="text-lg font-black text-gray-900 line-clamp-1">{artwork.name || artwork.title || 'Untitled'}</h3>
+                          {artwork.price > 0 && (
+                            <div className="flex items-center text-base font-extrabold text-gray-900 flex-shrink-0">
+                              <IndianRupee size={15} className="text-green-600" />
+                              <span>{Number(artwork.price).toLocaleString('en-IN')}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                           <button 
                             onClick={() => handleLike(artwork._id || artwork.id)}
                             className="flex items-center gap-1 text-gray-400 hover:text-red-500 transition-colors"
@@ -468,6 +560,17 @@ const ArtistProfile = () => {
                             </span>
                           </button>
 
+                          {/* E-Commerce Buy button - Only for approved E-Commerce sellers when artwork is available and has payment link */}
+                          {artist.isEcommerceSeller && artwork.status === 'available' && (artwork.price > 0 || artwork.paymentLink || artist?.ecommercePayment?.paymentLink) && (
+                            <button
+                              onClick={(e) => handleBuyArtwork(e, artwork)}
+                              className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg shadow-sm hover:shadow transition-all duration-200 active:scale-95"
+                              title="Purchase this artwork directly"
+                            >
+                              <ShoppingBag size={14} />
+                              <span>Buy Artwork</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -578,6 +681,127 @@ const ArtistProfile = () => {
         recipientId={artist._id}
         recipientName={artist.name}
       />
+
+      {/* Cashfree E-Commerce Purchase Modal */}
+      {buyModal.open && buyModal.artwork && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-red-600 to-rose-700 p-6 text-white">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-red-200 text-xs font-bold uppercase tracking-wider mb-1">
+                    <Store size={14} />
+                    <span>Official E-Commerce Purchase</span>
+                  </div>
+                  <h3 className="text-xl font-black text-white">{buyModal.artwork.name}</h3>
+                  <p className="text-red-100 text-xs mt-0.5">By {artist.name}</p>
+                </div>
+                {buyModal.artwork.price > 0 && (
+                  <div className="bg-white/20 backdrop-blur-md px-3.5 py-1.5 rounded-xl text-right">
+                    <div className="text-[10px] uppercase font-bold text-red-100">Price</div>
+                    <div className="text-lg font-black text-white">₹{Number(buyModal.artwork.price).toLocaleString('en-IN')}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleBuySubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={buyForm.name}
+                  onChange={(e) => setBuyForm({ ...buyForm, name: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="Your full name"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={buyForm.email}
+                    onChange={(e) => setBuyForm({ ...buyForm, email: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    placeholder="you@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Mobile Number *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={buyForm.phone}
+                    onChange={(e) => setBuyForm({ ...buyForm, phone: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    placeholder="10-digit mobile"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Delivery Address *
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={buyForm.address}
+                  onChange={(e) => setBuyForm({ ...buyForm, address: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                  placeholder="Street, City, State, PIN code"
+                />
+              </div>
+
+              {buyError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-medium text-red-600">
+                  {buyError}
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBuyModal({ open: false, artwork: null })}
+                  className="flex-1 py-3 px-4 rounded-xl border border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={buyLoading}
+                  className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-sm shadow-lg shadow-red-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {buyLoading ? (
+                    <span>Opening Gateway...</span>
+                  ) : (
+                    <>
+                      <ShoppingBag size={16} />
+                      <span>Pay ₹{Number(buyModal.artwork.price || 0).toLocaleString('en-IN')}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 pt-2 text-[11px] text-gray-400 font-medium">
+                <span>🔒 Secured via Cashfree Payment Gateway</span>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 };

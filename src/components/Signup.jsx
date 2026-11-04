@@ -18,7 +18,7 @@ const Signup = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from || '/dashboard';
+  const from = location.state?.from || '/profile';
 
   // Check if user is already logged in
   useEffect(() => {

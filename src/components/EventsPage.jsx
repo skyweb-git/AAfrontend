@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, MapPin, Clock, Ticket, X, CheckCircle, Loader2 } from 'lucide-react';
-import { eventsAPI, formsAPI } from '../services/api';
+import { ArrowLeft, Calendar, MapPin, Clock, Ticket, X, CheckCircle, Loader2, Tag, Sparkles } from 'lucide-react';
+import { eventsAPI, formsAPI, couponsAPI } from '../services/api';
 import SEO from './SEO';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -27,6 +27,45 @@ const EventFormModal = ({ event, onClose }) => {
     responses: []
   });
   const [error, setError] = useState('');
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState('');
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
+  const handleApplyCoupon = async (e) => {
+    if (e) e.preventDefault();
+    if (!couponInput.trim()) return;
+    setCouponError('');
+    setValidatingCoupon(true);
+    try {
+      const res = await couponsAPI.validateCoupon(
+        couponInput.trim(),
+        event.pricing?.amount || 0,
+        'events',
+        formData.guestEmail,
+        event._id
+      );
+      if (res && res.valid) {
+        setAppliedCoupon({
+          code: res.coupon.code,
+          discount: res.discount,
+          finalAmount: res.finalAmount
+        });
+        setCouponInput('');
+      } else {
+        setCouponError(res?.error || 'Invalid coupon code');
+      }
+    } catch (err) {
+      setCouponError(err.response?.data?.error || 'Invalid or expired coupon');
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponError('');
+  };
 
   useEffect(() => {
     if (user) {
@@ -132,7 +171,8 @@ const EventFormModal = ({ event, onClose }) => {
             guestName: formData.guestName,
             guestEmail: formData.guestEmail,
             guestPhone: formData.guestPhone,
-            responses: formData.responses
+            responses: formData.responses,
+            couponCode: appliedCoupon?.code
           });
 
           if (response.data && response.data.paymentSessionId) {
@@ -360,6 +400,68 @@ const EventFormModal = ({ event, onClose }) => {
               );
             })}
 
+            {/* Coupon Code Section for Paid Events */}
+            {event.pricing?.type === 'paid' && (
+              <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">Ticket Price:</span>
+                  <span className="font-semibold text-gray-900">₹{Number(event.pricing.amount || 0).toLocaleString()}</span>
+                </div>
+
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs">
+                    <div className="flex items-center gap-1.5 text-emerald-800">
+                      <Sparkles size={14} className="text-emerald-600" />
+                      <span className="font-mono font-bold uppercase">{appliedCoupon.code}</span>
+                      <span>(-₹{appliedCoupon.discount} OFF)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="text-red-600 hover:text-red-800 font-semibold"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 pt-1">
+                    <div className="relative flex-1">
+                      <Tag size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Coupon code..."
+                        value={couponInput}
+                        onChange={(e) => {
+                          setCouponInput(e.target.value.toUpperCase());
+                          setCouponError('');
+                        }}
+                        className="w-full pl-8 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg font-mono uppercase focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={validatingCoupon || !couponInput.trim()}
+                      className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-black disabled:opacity-50 transition-colors"
+                    >
+                      {validatingCoupon ? 'Checking...' : 'Apply'}
+                    </button>
+                  </div>
+                )}
+
+                {couponError && (
+                  <p className="text-xs text-red-600">{couponError}</p>
+                )}
+
+                <div className="flex justify-between items-center text-sm font-bold pt-2 border-t border-gray-200">
+                  <span>Payable Amount:</span>
+                  <span className="text-red-600">
+                    ₹{appliedCoupon ? appliedCoupon.finalAmount.toLocaleString() : Number(event.pricing.amount || 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={submitting}
@@ -369,6 +471,8 @@ const EventFormModal = ({ event, onClose }) => {
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
                 </>
+              ) : event.pricing?.type === 'paid' ? (
+                <>Pay ₹{appliedCoupon ? appliedCoupon.finalAmount.toLocaleString() : Number(event.pricing?.amount || 0).toLocaleString()} & Register</>
               ) : (
                 <>Submit Registration</>
               )}

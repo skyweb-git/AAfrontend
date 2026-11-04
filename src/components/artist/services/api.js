@@ -159,4 +159,11 @@ export const productsAPI = {
   },
 }
 
+export const ecommerceAPI = {
+  getMyEcommerceSales: async (artistId, params = {}) => {
+    const response = await api.get(`/ecommerce/artist/${artistId}/sales`, { params });
+    return response.data;
+  },
+}
+
 export default api

@@ -21,7 +21,7 @@ const resolveApiBaseUrl = () => {
 
   // Priority 2: Local development
   if (process.env.NODE_ENV === 'development') {
-    return normalizeApiBaseUrl(process.env.REACT_APP_DEV_API_URL || 'https://sverxiioo.nanoprofiles.com');
+    return normalizeApiBaseUrl(process.env.REACT_APP_DEV_API_URL || 'https://sverxiioo.nanoprofiles.com/api');
   }
 
   // Priority 3: Default production URL (fallback)

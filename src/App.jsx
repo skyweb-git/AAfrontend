@@ -37,6 +37,7 @@ import { ArtistProvider } from './components/artist/context/ArtistContext';
 import ArtistLogin from './components/artist/pages/ArtistLogin';
 import ArtistVerifyOTP from './components/artist/pages/ArtistVerifyOTP';
 import ArtistDashboard from './components/artist/pages/ArtistDashboard';
+import EcommerceSuccess from './components/EcommerceSuccess';
 
 // Helper component to scroll to top on route change
 const ScrollToTop = () => {
@@ -99,6 +100,7 @@ function App() {
               <Route path="/artist/verify-otp" element={<RouteWithLoader element={<ArtistVerifyOTP />} />} />
               <Route path="/artist/dashboard" element={<RouteWithLoader element={<ArtistDashboard />} />} />
               <Route path="/artist/:artistId" element={<RouteWithLoader element={<ArtistProfile />} />} />
+              <Route path="/ecommerce-success" element={<RouteWithLoader element={<EcommerceSuccess />} />} />
               {/* Clean username-based artist profile URLs e.g. /udaymicroartist */}
               <Route path="/:artistId" element={<RouteWithLoader element={<ArtistProfile />} />} />
             </Routes>

@@ -2,22 +2,16 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   User, Mail, MapPin, Phone, Globe, Instagram, Facebook,
-  Linkedin, Save, LogOut, Camera, Loader2, Home,
-  Briefcase, Image as ImageIcon, MessageSquare, Trash2
+  Linkedin, Save, Camera, Loader2,
+  Briefcase, Image as ImageIcon, Trash2,
+  ShoppingBag, Package, IndianRupee, TrendingUp, Lock, Store, ArrowLeft
 } from 'lucide-react'
-import { artistAuth, messagesAPI, productsAPI } from '../services/api'
+import { artistAuth, productsAPI, ecommerceAPI } from '../services/api'
 import { useArtist } from '../context/ArtistContext'
-import ArtistChatWindow from '../components/ArtistChatWindow'
-import { io } from 'socket.io-client'
-import { Plus, Edit2, ExternalLink, X } from 'lucide-react'
+import { Plus, Edit2, ExternalLink, X, Crop } from 'lucide-react'
+import ImageCropperModal from '../components/ImageCropperModal'
 
 // Robust Socket URL resolution (matches api.js logic)
-const resolveSocketUrl = () => {
-  if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL.replace(/\/api$/, '');
-  return 'https://sverxiioo.nanoprofiles.com';
-};
-
-const SOCKET_URL = resolveSocketUrl();
 
 const ArtistDashboard = () => {
   const navigate = useNavigate()
@@ -28,10 +22,7 @@ const ArtistDashboard = () => {
   const [activeTab, setActiveTab] = useState('profile')
   const [message, setMessage] = useState({ type: '', text: '' })
   const [formData, setFormData] = useState(null)
-  const [dms, setDms] = useState([])
-  const [loadingMessages, setLoadingMessages] = useState(false)
-  const [selectedConversation, setSelectedConversation] = useState(null)
-  const [artworks, setArtworks] = useState([])
+        const [artworks, setArtworks] = useState([])
   const [loadingArtworks, setLoadingArtworks] = useState(false)
   const [isArtModalOpen, setIsArtModalOpen] = useState(false)
   const [editingArt, setEditingArt] = useState(null)
@@ -40,11 +31,30 @@ const ArtistDashboard = () => {
     category: 'Painting',
     description: '',
     status: 'available',
+    price: '',
     tags: []
   })
   const [artFiles, setArtFiles] = useState([])
+  const [artPreviews, setArtPreviews] = useState([])
+  const [cropperModal, setCropperModal] = useState({
+    isOpen: false,
+    fileIndex: null,
+    imageSrc: null,
+    fileName: ''
+  })
   const fileInputRef = useRef(null)
   const artFilesInputRef = useRef(null)
+
+  // E-Commerce Sales State
+  const [ecommerceSales, setEcommerceSales] = useState([])
+  const [loadingEcommerce, setLoadingEcommerce] = useState(false)
+  const [ecommerceStats, setEcommerceStats] = useState({
+    totalSales: 0,
+    totalRevenue: 0,
+    totalPayout: 0,
+    paidCount: 0,
+    pendingCount: 0
+  })
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -57,35 +67,13 @@ const ArtistDashboard = () => {
 
   useEffect(() => {
     if (isAuthenticated && artist?._id) {
-      loadMessages()
       loadArtworks()
+      loadEcommerceSales()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, artist?._id])
 
-  // ── Global Socket for Inbox Updates ──────────────────────────────────────
-  useEffect(() => {
-    if (!isAuthenticated || !artist?._id) return;
-
-    const myId = artist._id;
-    const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling']
-    });
-
-    socket.on('connect', () => {
-      console.log('✅ Artist Dashboard Socket Connected:', socket.id);
-      socket.emit('join_conversation', `user_${myId}`);
-    });
-
-    socket.on('new_message_notification', (newMsg) => {
-      console.log('🔔 Artist: New message notification for inbox:', newMsg);
-      // Refresh inbox list
-      loadMessages();
-    });
-
-    return () => socket.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, artist?._id]);
+  
 
   const loadProfile = async () => {
     try {
@@ -111,23 +99,6 @@ const ArtistDashboard = () => {
     }
   }
 
-  const loadMessages = async () => {
-    if (!artist?._id) {
-      console.warn('Artist ID not found, skipping message load');
-      return;
-    }
-    console.log('Loading messages for artist:', artist._id);
-    setLoadingMessages(true);
-    try {
-      const data = await messagesAPI.getInbox(artist._id);
-      setDms(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to load messages:', err);
-    } finally {
-      setLoadingMessages(false);
-    }
-  }
-
   const loadArtworks = async () => {
     if (!artist?._id) return;
     setLoadingArtworks(true);
@@ -142,6 +113,90 @@ const ArtistDashboard = () => {
     }
   }
 
+  const loadEcommerceSales = async () => {
+    if (!artist?._id) return;
+    setLoadingEcommerce(true);
+    try {
+      const res = await ecommerceAPI.getMyEcommerceSales(artist._id);
+      setEcommerceSales(res.sales || []);
+      if (res.stats) setEcommerceStats(res.stats);
+    } catch (err) {
+      console.error('Failed to load e-commerce sales:', err);
+    } finally {
+      setLoadingEcommerce(false);
+    }
+  }
+
+    const handleArtFilesChange = (e) => {
+    const selected = Array.from(e.target.files || []);
+    if (selected.length === 0) return;
+
+    const totalSize = selected.reduce((acc, f) => acc + f.size, 0);
+    if (totalSize > 8 * 1024 * 1024) {
+      alert(`Total size of selected images is ${(totalSize / (1024 * 1024)).toFixed(1)}MB. Limit is 8MB total. Please select smaller images.`);
+      e.target.value = '';
+      return;
+    }
+
+    setArtFiles(selected);
+    const previews = selected.map(file => ({
+      file,
+      url: URL.createObjectURL(file),
+      name: file.name,
+      size: (file.size / 1024).toFixed(0) + ' KB',
+      isCropped: false
+    }));
+    setArtPreviews(previews);
+  };
+
+  const handleOpenCropper = (index) => {
+    if (!artPreviews[index]) return;
+    setCropperModal({
+      isOpen: true,
+      fileIndex: index,
+      imageSrc: artPreviews[index].url,
+      fileName: artPreviews[index].name
+    });
+  };
+
+  const handleCropComplete = (croppedFile, croppedPreviewUrl) => {
+    if (cropperModal.fileIndex === null) return;
+    const index = cropperModal.fileIndex;
+    
+    // Update artFiles array with the new cropped file
+    const newFiles = [...artFiles];
+    newFiles[index] = croppedFile;
+    setArtFiles(newFiles);
+
+    // Update artPreviews array
+    const newPreviews = [...artPreviews];
+    newPreviews[index] = {
+      file: croppedFile,
+      url: croppedPreviewUrl,
+      name: croppedFile.name,
+      size: (croppedFile.size / 1024).toFixed(0) + ' KB',
+      isCropped: true
+    };
+    setArtPreviews(newPreviews);
+
+    setCropperModal({
+      isOpen: false,
+      fileIndex: null,
+      imageSrc: null,
+      fileName: ''
+    });
+  };
+
+  const handleRemoveArtFile = (index) => {
+    const newFiles = artFiles.filter((_, i) => i !== index);
+    const newPreviews = artPreviews.filter((_, i) => i !== index);
+    setArtFiles(newFiles);
+    setArtPreviews(newPreviews);
+    if (artFilesInputRef.current) {
+      artFilesInputRef.current.value = '';
+    }
+  };
+
   const handleArtSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -150,6 +205,7 @@ const ArtistDashboard = () => {
     // Ensure artistProfile is set
     const dataToSend = {
       ...artFormData,
+      price: Number(artFormData.price) || 0,
       artistProfile: artist?._id
     };
 
@@ -180,6 +236,7 @@ const ArtistDashboard = () => {
       setIsArtModalOpen(false);
       setEditingArt(null);
       setArtFiles([]);
+      setArtPreviews([]);
       loadArtworks();
     } catch (err) {
       console.error('Failed to save artwork:', err);
@@ -220,9 +277,11 @@ const ArtistDashboard = () => {
       category: 'Painting',
       description: '',
       status: 'available',
+      price: '',
       tags: []
     });
     setArtFiles([]);
+    setArtPreviews([]);
     setIsArtModalOpen(true);
   }
 
@@ -233,9 +292,11 @@ const ArtistDashboard = () => {
       category: art.category,
       description: art.description,
       status: art.status,
+      price: art.price !== undefined && art.price !== null ? art.price : '',
       tags: art.tags || []
     });
     setArtFiles([]);
+    setArtPreviews([]);
     setIsArtModalOpen(true);
   }
 
@@ -302,42 +363,8 @@ const ArtistDashboard = () => {
     }
   }
 
-  /* eslint-disable-next-line no-unused-vars */
-  const handleDeleteMessage = async (id) => {
-    try {
-      await messagesAPI.deleteMessage(id);
-      setDms(prev => prev.filter(m => (m._id || m.id) !== id));
-    } catch (err) {
-      console.error('Delete failed:', err);
-    }
-  }
-
-  /* eslint-disable-next-line no-unused-vars */
-  const handleMarkAsRead = async (id) => {
-    try {
-      await messagesAPI.markAsRead(id);
-      setDms(prev => prev.map(m => (m._id || m.id) === id ? { ...m, status: 'read' } : m));
-    } catch (err) {
-      console.error('Mark as read failed:', err);
-    }
-  }
-
-  const handleLogout = () => {
-    logout()
-    navigate('/artist/login')
-  }
-
-  /* eslint-disable-next-line no-unused-vars */
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp)
-    return date.toLocaleString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
-
+  
+  
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -369,26 +396,18 @@ const ArtistDashboard = () => {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-semibold transition-all border border-gray-200 active:scale-95 duration-200 shadow-2xs"
+              title="Back to Home"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center shadow-xs">
               <span className="text-white font-bold text-xl">A</span>
             </div>
             <h1 className="text-xl font-bold text-gray-900 tracking-tight">Artist Dashboard</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/')}
-              className="flex items-center gap-2 text-gray-500 hover:text-black font-medium transition-colors bg-gray-50 px-4 py-2 rounded-lg border border-gray-200"
-            >
-              <Home className="w-5 h-5" />
-              Back to Home
-            </button>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-gray-500 hover:text-red-600 font-medium transition-colors bg-gray-50 px-4 py-2 rounded-lg border border-gray-200"
-            >
-              <LogOut className="w-5 h-5" />
-              Logout
-            </button>
           </div>
         </div>
       </header>
@@ -412,13 +431,16 @@ const ArtistDashboard = () => {
               My Artworks
             </button>
             <button
-              onClick={() => setActiveTab('messages')}
-              className={`py-4 px-2 font-bold text-sm uppercase tracking-widest border-b-2 transition-all relative ${activeTab === 'messages' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'
+              onClick={() => {
+                setActiveTab('ecommerce');
+                loadEcommerceSales();
+              }}
+              className={`py-4 px-2 font-bold text-sm uppercase tracking-widest border-b-2 transition-all relative ${activeTab === 'ecommerce' ? 'border-black text-black' : 'border-transparent text-gray-400 hover:text-gray-600'
                 }`}
             >
-              Messages
-              {dms.length > 0 && (
-                <span className="absolute top-3 -right-2 w-2 h-2 bg-red-600 rounded-full"></span>
+              E-Commerce
+              {ecommerceStats.pendingCount > 0 && (
+                <span className="absolute top-3 -right-2 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
               )}
             </button>
           </div>
@@ -436,7 +458,7 @@ const ArtistDashboard = () => {
           </div>
         )}
 
-        {activeTab === 'profile' ? (
+        {activeTab === 'profile' && (
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Profile Image */}
             <div className="bg-white rounded-xl shadow-sm p-6">
@@ -698,7 +720,9 @@ const ArtistDashboard = () => {
               </button>
             </div>
           </form>
-        ) : activeTab === 'artworks' ? (
+        )}
+
+        {activeTab === 'artworks' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-100">
               <div>
@@ -787,7 +811,13 @@ const ArtistDashboard = () => {
                     <div className="p-5">
                       <h3 className="font-bold text-gray-900 group-hover:text-black transition-colors truncate">{art.name}</h3>
                       <p className="text-gray-500 text-sm line-clamp-2 mt-1 min-h-[40px]">{art.description}</p>
-                      <div className="mt-4 flex items-center justify-end border-t border-gray-50 pt-4">
+                      <div className="mt-4 flex items-center justify-between border-t border-gray-50 pt-3">
+                        <div>
+                          <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest">Price</span>
+                          <span className="text-sm font-black text-gray-900">
+                            {Number(art.price) > 0 ? `₹${Number(art.price).toLocaleString('en-IN')}` : 'Not set'}
+                          </span>
+                        </div>
                         <div className="flex gap-4">
                           <div className="text-center">
                             <span className="block text-[10px] text-gray-400 font-bold uppercase tracking-widest">Views</span>
@@ -879,55 +909,165 @@ const ArtistDashboard = () => {
                           <option value="reserved">Reserved</option>
                         </select>
                       </div>
+                      <div>
+                        <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center justify-between">
+                          <span>Selling Price (₹)</span>
+                          {artist?.isEcommerceSeller ? (
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                              ✓ E-Commerce Active
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                              Pending Approval
+                            </span>
+                          )}
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={artFormData.price}
+                            onChange={(e) => setArtFormData({ ...artFormData, price: e.target.value })}
+                            placeholder="e.g., 5000"
+                            className="w-full pl-8 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:bg-white outline-none transition-all font-semibold"
+                          />
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          {artist?.isEcommerceSeller
+                            ? "This price will be shown to buyers on ART SHOWCASE and collectors can buy directly."
+                            : "Set your price. Once admin approves your e-commerce account, buyers can purchase at this price."}
+                        </p>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-black text-gray-500 uppercase tracking-widest mb-2">
-                        {editingArt ? 'Replace Images (Optional)' : 'Upload Images *'}
-                      </label>
-                      <div
-                        onClick={() => artFilesInputRef.current?.click()}
-                        className="border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center hover:border-black hover:bg-gray-50 transition-all cursor-pointer group"
-                      >
-                        <input
-                          ref={artFilesInputRef}
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          required={!editingArt}
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files);
-                            const totalSize = files.reduce((acc, f) => acc + f.size, 0);
-                            
-                            if (totalSize > 4 * 1024 * 1024) {
-                              alert(`Total size of selected images is ${(totalSize / (1024 * 1024)).toFixed(1)}MB. Vercel limits uploads to 4.5MB total. Please select fewer or smaller images.`);
-                              e.target.value = '';
-                              setArtFiles([]);
-                              return;
-                            }
-
-                            const largeFiles = files.filter(f => f.size > 2 * 1024 * 1024);
-                            if (largeFiles.length > 0) {
-                              alert(`One or more files exceed the 2MB per file limit: ${largeFiles.map(f => f.name).join(', ')}.`);
-                              e.target.value = '';
-                              setArtFiles([]);
-                              return;
-                            }
-                            setArtFiles(e.target.files);
-                          }}
-                          className="hidden"
-                        />
-                        <ImageIcon className="w-12 h-12 text-gray-300 mx-auto mb-4 group-hover:text-black transition-colors" />
-                        <p className="text-sm font-bold text-gray-900">Click to upload images</p>
-                        <p className="text-xs text-gray-500 mt-2">PNG, JPG or WEBP (Max 4MB total for all images)</p>
+<div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-black text-gray-500 uppercase tracking-widest">
+                          {editingArt ? 'Artwork Images' : 'Upload Images *'}
+                        </label>
+                        {artPreviews.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => artFilesInputRef.current?.click()}
+                            className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline flex items-center gap-1"
+                          >
+                            <Plus size={14} />
+                            <span>Select Different Images</span>
+                          </button>
+                        )}
                       </div>
-                      {artFiles.length > 0 && (
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {Array.from(artFiles).map((file, i) => (
-                            <div key={i} className="px-3 py-1 bg-black text-white rounded-full text-[10px] font-bold">
-                              {file.name}
+
+                      {/* Hidden File Input */}
+                      <input
+                        ref={artFilesInputRef}
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleArtFilesChange}
+                        className="hidden"
+                      />
+
+                      {/* If no previews and editingArt has existing images, show them */}
+                      {artPreviews.length === 0 && editingArt?.images && editingArt.images.length > 0 && (
+                        <div className="mb-4">
+                          <p className="text-xs text-gray-400 mb-2 font-medium">Current Artwork Image:</p>
+                          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+                            <img
+                              src={editingArt.images[0].url}
+                              alt={editingArt.name}
+                              className="w-16 h-16 rounded-xl object-cover border border-gray-200"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-gray-800 truncate">{editingArt.name}</p>
+                              <p className="text-[11px] text-gray-400">Click below to upload a new image or crop</p>
                             </div>
-                          ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Dropzone (When no files selected) */}
+                      {artPreviews.length === 0 ? (
+                        <div
+                          onClick={() => artFilesInputRef.current?.click()}
+                          className="border-2 border-dashed border-gray-200 rounded-3xl p-10 text-center hover:border-black hover:bg-gray-50/70 transition-all cursor-pointer group"
+                        >
+                          <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-4 border border-gray-100 group-hover:scale-105 group-hover:bg-red-50 transition-all">
+                            <ImageIcon className="w-8 h-8 text-gray-400 group-hover:text-red-600 transition-colors" />
+                          </div>
+                          <p className="text-sm font-bold text-gray-900">Click to upload artwork image</p>
+                          <p className="text-xs text-gray-400 mt-1">PNG, JPG or WEBP (Max 8MB total)</p>
+                          <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 group-hover:bg-black group-hover:text-white rounded-full text-[11px] font-bold text-gray-600 transition-colors">
+                            <Crop size={12} />
+                            <span>Preview & Crop Supported</span>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Selected Images Preview Grid with Crop & Delete */
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {artPreviews.map((item, idx) => (
+                              <div
+                                key={idx}
+                                className="group relative bg-white rounded-2xl border border-gray-200/90 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col"
+                              >
+                                {/* Image Preview Container */}
+                                <div className="relative w-full h-48 bg-neutral-900 overflow-hidden flex items-center justify-center">
+                                  <img
+                                    src={item.url}
+                                    alt={item.name}
+                                    className="w-full h-full object-contain"
+                                  />
+                                  {/* Badge: Cropped vs Original */}
+                                  <div className="absolute top-2.5 left-2.5">
+                                    <span className={`px-2.5 py-1 text-[10px] font-extrabold uppercase rounded-full shadow-xs ${
+                                      item.isCropped
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-black/80 text-white backdrop-blur-xs'
+                                    }`}>
+                                      {item.isCropped ? '✓ Cropped' : 'Original'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Details & Actions Footer */}
+                                <div className="p-3 bg-white flex items-center justify-between gap-2 border-t border-gray-100">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-bold text-gray-900 truncate" title={item.name}>
+                                      {item.name}
+                                    </p>
+                                    <p className="text-[10px] text-gray-400 font-medium">
+                                      {item.size}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    {/* Crop Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenCropper(idx)}
+                                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-black hover:text-white text-gray-800 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-2xs"
+                                      title="Crop & Adjust Image"
+                                    >
+                                      <Crop size={13} />
+                                      <span>Crop</span>
+                                    </button>
+
+                                    {/* Remove Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveArtFile(idx)}
+                                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                                      title="Remove Image"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -960,125 +1100,286 @@ const ArtistDashboard = () => {
               </div>
             )}
           </div>
-        ) : (
-          <div className="flex flex-col md:flex-row gap-6 h-[700px]">
-            {/* Sidebar: Conversations */}
-            <div className="w-full md:w-80 bg-white rounded-2xl shadow-lg border border-gray-100 flex flex-col overflow-hidden">
-              <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                <h3 className="font-bold text-gray-900 uppercase text-xs tracking-widest">Inbox</h3>
-                <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{dms.length}</span>
+        )}
+
+        {/* E-Commerce Tab View */}
+        {activeTab === 'ecommerce' && (
+          <div>
+            {!artist?.isEcommerceSeller ? (
+              <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12 text-center max-w-2xl mx-auto my-6 animate-in fade-in duration-300">
+                <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-amber-100">
+                  <Lock className="w-10 h-10" />
+                </div>
+                <span className="inline-block px-3 py-1 bg-amber-100 text-amber-800 text-xs font-black uppercase tracking-wider rounded-full mb-3">
+                  Admin Approval Required
+                </span>
+                <h3 className="text-2xl font-black text-gray-900 mb-3">
+                  E-Commerce Not Activated
+                </h3>
+                <p className="text-gray-600 text-base leading-relaxed mb-6">
+                  Admin should need to approve your account so you can activate the E-Commerce page and start selling your artworks.
+                </p>
+                <div className="bg-gray-50 border border-gray-200/60 rounded-2xl p-5 text-left text-sm text-gray-600 space-y-2 mb-6">
+                  <div className="font-bold text-gray-900 flex items-center gap-2">
+                    <Store className="w-4 h-4 text-red-600" />
+                    <span>Once approved by admin:</span>
+                  </div>
+                  <ul className="text-xs text-gray-500 space-y-2 list-disc list-inside">
+                    <li>Your artworks will feature direct Cashfree checkout for collectors</li>
+                    <li>Selling prices will be displayed on ART SHOWCASE and the main Art Store</li>
+                    <li>Track all paid transactions, payouts, and customer orders directly on this dashboard</li>
+                  </ul>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Please contact the platform administrator to review and activate e-commerce selling for your profile.
+                </p>
               </div>
-              <div className="flex-1 overflow-y-auto">
-                {loadingMessages ? (
-                  <div className="py-20 text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-gray-300 mx-auto" />
+            ) : (
+              <div className="space-y-6">
+                {/* Header & Seller Status */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <ShoppingBag className="w-6 h-6 text-red-600" />
+                        <h2 className="text-xl font-bold text-gray-900">E-Commerce Management</h2>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Track your artwork sales, order payments, and platform payout disbursements.
+                      </p>
+                    </div>
+
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Approved Platform Seller</span>
+                      {artist?.ecommercePayment?.commissionRate > 0 && (
+                        <span className="text-emerald-600 font-normal">
+                          ({artist.ecommercePayment.commissionRate}% platform fee)
+                        </span>
+                      )}
+                    </div>
                   </div>
-                ) : dms.length === 0 ? (
-                  <div className="py-20 text-center px-4">
-                    <MessageSquare className="w-8 h-8 text-gray-200 mx-auto mb-3" />
-                    <p className="text-xs text-gray-400">No messages yet</p>
-                  </div>
-                ) : (
-                  (() => {
-                    const conversationsMap = {};
-                    dms.forEach(dm => {
-                      const senderIdStr = (dm.sender?._id || dm.sender)?.toString();
-                      const myArtistIdStr = (artist?._id || artist?.id)?.toString();
-                      const myUserIdStr = artist?.userId?.toString();
+                </div>
 
-                      const isMeSender = dm.senderType === 'artist' || 
-                                         senderIdStr === myArtistIdStr || 
-                                         (myUserIdStr && senderIdStr === myUserIdStr);
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                <div className="flex items-center justify-between text-red-500 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Sale Products</span>
+                  <ShoppingBag size={18} className="text-red-600" />
+                </div>
+                <div className="text-2xl font-black text-gray-900">
+                  {artworks.filter(a => a.status === 'available' && Number(a.price) > 0).length}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">Active for sale on Showcase</div>
+              </div>
 
-                      const partner = isMeSender ? dm.recipient : dm.sender;
-                      if (!partner?._id) return;
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                <div className="flex items-center justify-between text-gray-400 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Total Orders</span>
+                  <Package size={18} className="text-gray-400" />
+                </div>
+                <div className="text-2xl font-black text-gray-900">{ecommerceStats.totalSales}</div>
+                <div className="text-xs text-gray-400 mt-1">{ecommerceStats.paidCount} fulfilled / paid</div>
+              </div>
 
-                      if (!conversationsMap[partner._id] || new Date(dm.createdAt) > new Date(conversationsMap[partner._id].lastMessage.createdAt)) {
-                        conversationsMap[partner._id] = {
-                          partner,
-                          lastMessage: dm
-                        };
-                      }
-                    });
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                <div className="flex items-center justify-between text-gray-400 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Gross Sales</span>
+                  <IndianRupee size={18} className="text-gray-400" />
+                </div>
+                <div className="text-2xl font-black text-gray-900">₹{(ecommerceStats.totalRevenue || 0).toLocaleString('en-IN')}</div>
+                <div className="text-xs text-gray-400 mt-1">Total collected volume</div>
+              </div>
 
-                    const conversationList = Object.values(conversationsMap).sort((a, b) =>
-                      new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt)
-                    );
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                <div className="flex items-center justify-between text-green-500 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Paid Orders</span>
+                  <TrendingUp size={18} />
+                </div>
+                <div className="text-2xl font-black text-emerald-600">{ecommerceStats.paidCount}</div>
+                <div className="text-xs text-emerald-600 font-medium mt-1">Completed purchases</div>
+              </div>
 
-                    return conversationList.map((conv) => {
-                      const { partner, lastMessage } = conv;
-                      const isSelected = selectedConversation?.partner?._id === partner._id;
-
-                      return (
-                        <div
-                          key={partner._id}
-                          onClick={() => setSelectedConversation({ partner })}
-                          className={`p-4 cursor-pointer border-b border-gray-50 transition-all hover:bg-gray-50 ${isSelected ? 'bg-black text-white' : ''}`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200">
-                              {partner.photoURL || partner.image?.url ? (
-                                <img src={partner.photoURL || partner.image?.url} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-500 font-bold uppercase text-xs">
-                                  {(partner.displayName || partner.name || 'C')[0]}
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <h4 className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-gray-900'} flex items-center gap-1`}>
-                                <span>
-                                   {(partner.email === 'artartistofficial@gmail.com' || partner.email === 'artartistdata@gmail.com' || partner.displayName === 'ArtArtist' || partner.name === 'ArtArtist') 
-                                     ? 'ArtArtist' 
-                                     : (partner.displayName || partner.name || 'Collector')}
-                                 </span>
-                                 {(partner.email === 'artartistofficial@gmail.com' || partner.email === 'artartistdata@gmail.com' || partner.displayName === 'ArtArtist' || partner.name === 'ArtArtist') && (
-                                   <svg className="w-4 h-4 fill-[#0095f6] flex-shrink-0 inline-block align-middle" viewBox="0 0 24 24" aria-label="Verified account">
-                                     <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.99-3.818-3.99-.48 0-.941.1-1.358.275C14.77 2.515 13.512 1.5 12 1.5s-2.77 1.015-3.412 2.285C8.171 3.6 7.71 3.5 7.23 3.5 5.122 3.5 3.412 5.28 3.412 7.49c0 .495.084.965.238 1.4-1.273.65-2.148 2.02-2.148 3.6 0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.21 1.71 3.99 3.818 3.99.48 0 .941-.1 1.358-.275C9.23 21.485 10.488 22.5 12 22.5s2.77-1.015 3.412-2.285c.418.175.878.275 1.358.275 2.108 0 3.818-1.78 3.818-3.99 0-.495-.084-.965-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.72 4.43l-4.24-4.24 1.41-1.41 2.83 2.82 7.07-7.07 1.41 1.41-8.48 8.49z"></path>
-                                   </svg>
-                                 )}
-                              </h4>
-                              <p className={`text-xs truncate ${isSelected ? 'text-gray-300' : 'text-gray-500'}`}>
-                                {lastMessage.text}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()
-                )}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                <div className="flex items-center justify-between text-blue-500 mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Your Payout</span>
+                  <IndianRupee size={18} />
+                </div>
+                <div className="text-2xl font-black text-blue-600">₹{(ecommerceStats.totalPayout || 0).toLocaleString('en-IN')}</div>
+                <div className="text-xs text-blue-600 font-medium mt-1">Disbursable earnings</div>
               </div>
             </div>
 
-            {/* Main: Chat Window */}
-            <div className="flex-1 bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden flex flex-col">
-              {selectedConversation ? (
-                <ArtistChatWindow
-                  currentUser={artist}
-                  partnerId={selectedConversation.partner?._id}
-                  partnerName={selectedConversation.partner?.displayName || selectedConversation.partner?.name}
-                  partnerImage={selectedConversation.partner?.photoURL || selectedConversation.partner?.image?.url}
-                  partnerEmail={selectedConversation.partner?.email}
-                  onNewMessage={(msg) => {
-                    setDms(prev => [msg, ...prev]);
-                  }}
-                />
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center p-10 text-center bg-gray-50/30">
-                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-gray-100">
-                    <MessageSquare size={32} className="text-gray-200" />
+            {/* Active Artworks on Sale Section */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <ShoppingBag className="w-5 h-5 text-red-600" />
+                    <h3 className="font-bold text-gray-900 text-base">Your Artworks Listed For Sale</h3>
+                    <span className="px-2.5 py-0.5 bg-red-50 text-red-600 text-xs font-extrabold rounded-full border border-red-200">
+                      {artworks.filter(a => a.status === 'available' && Number(a.price) > 0).length} Live
+                    </span>
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900">Artist Inbox</h3>
-                  <p className="text-sm text-gray-400 mt-2 max-w-xs">
-                    Select a collector from the sidebar to view the full conversation and reply in real-time.
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Artworks with an active price appear at the top of ART SHOWCASE with instant Cashfree checkout.
                   </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('artworks')}
+                  className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline transition-colors self-start sm:self-auto"
+                >
+                  Manage in My Artworks &rarr;
+                </button>
+              </div>
+
+              {artworks.filter(a => a.status === 'available' && Number(a.price) > 0).length === 0 ? (
+                <div className="p-6 bg-gray-50 rounded-xl text-center border border-dashed border-gray-200">
+                  <p className="text-xs font-medium text-gray-500 mb-2">You don't have any artworks priced for sale yet.</p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('artworks')}
+                    className="px-4 py-2 bg-black hover:bg-gray-800 text-white text-xs font-bold rounded-xl transition-all shadow-xs"
+                  >
+                    Go to My Artworks to Set Prices &rarr;
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {artworks.filter(a => a.status === 'available' && Number(a.price) > 0).map((art) => (
+                    <div key={art._id} className="flex items-center gap-3 p-3 bg-gray-50/80 rounded-xl border border-gray-200/70 hover:bg-gray-50 transition-colors">
+                      <div className="w-12 h-12 rounded-lg bg-gray-200 overflow-hidden flex-shrink-0">
+                        {art.images?.[0]?.url ? (
+                          <img src={art.images[0].url} alt={art.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs font-bold">Art</div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-xs font-bold text-gray-900 truncate">{art.name}</h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs font-extrabold text-emerald-700">₹{Number(art.price).toLocaleString('en-IN')}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-semibold">Live on Showcase</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
+
+            {/* Orders Table */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-gray-900">Your Sales History</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Purchases made via ART SHOWCASE & profile store</p>
+                </div>
+                <button
+                  onClick={loadEcommerceSales}
+                  disabled={loadingEcommerce}
+                  className="px-3.5 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  {loadingEcommerce ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+
+              {loadingEcommerce ? (
+                <div className="py-20 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-gray-300" />
+                </div>
+              ) : ecommerceSales.length === 0 ? (
+                <div className="py-20 text-center px-4">
+                  <div className="w-16 h-16 bg-gray-50 text-gray-300 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <ShoppingBag size={28} />
+                  </div>
+                  <h4 className="text-base font-bold text-gray-900">No sales transactions yet</h4>
+                  <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+                    When collectors purchase your artworks from ART SHOWCASE or your artist profile, your orders will appear here automatically.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="bg-gray-50/60 border-b border-gray-100 text-[11px] font-black uppercase tracking-wider text-gray-500">
+                        <th className="px-5 py-3">Order ID</th>
+                        <th className="px-5 py-3">Artwork</th>
+                        <th className="px-5 py-3">Collector</th>
+                        <th className="px-5 py-3 text-right">Gross Price</th>
+                        <th className="px-5 py-3 text-right">Your Payout</th>
+                        <th className="px-5 py-3 text-center">Status</th>
+                        <th className="px-5 py-3">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {ecommerceSales.map((sale) => (
+                        <tr key={sale._id} className="hover:bg-gray-50/60 transition-colors">
+                          <td className="px-5 py-4 font-mono text-xs text-gray-600 font-bold">
+                            {sale.orderId}
+                          </td>
+                          <td className="px-5 py-4 font-bold text-gray-900">
+                            {sale.productName || 'Artwork'}
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="font-medium text-gray-900">{sale.buyerName}</div>
+                            <div className="text-xs text-gray-400">{sale.buyerEmail} {sale.buyerPhone ? `• ${sale.buyerPhone}` : ''}</div>
+                          </td>
+                          <td className="px-5 py-4 text-right font-black text-gray-900">
+                            ₹{Number(sale.amount || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="px-5 py-4 text-right font-black text-emerald-600">
+                            ₹{Number(sale.artistPayoutAmount || sale.amount || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="px-5 py-4 text-center">
+                            <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                              sale.status === 'paid' || sale.status === 'completed'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : sale.status === 'pending'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {sale.status}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-xs text-gray-500 whitespace-nowrap">
+                            {sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            }) : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+              </div>
+            )}
           </div>
         )}
+
       </main>
+
+      {/* Interactive Image Cropper Modal */}
+      <ImageCropperModal
+        isOpen={cropperModal.isOpen}
+        imageSrc={cropperModal.imageSrc}
+        fileName={cropperModal.fileName}
+        onCropComplete={handleCropComplete}
+        onCancel={() =>
+          setCropperModal({
+            isOpen: false,
+            fileIndex: null,
+            imageSrc: null,
+            fileName: ''
+          })
+        }
+      />
     </div>
   )
 }

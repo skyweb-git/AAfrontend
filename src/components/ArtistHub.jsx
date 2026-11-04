@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, MapPin, Phone, Mail, Camera, CreditCard, Shield, Check } from 'lucide-react';
+import { ArrowLeft, User, MapPin, Phone, Mail, Camera, CreditCard, Shield, Check, Tag, Sparkles, AlertCircle } from 'lucide-react';
+import { couponsAPI } from '../services/api';
 import axios from 'axios';
 
 const ArtistHub = () => {
@@ -19,6 +20,44 @@ const ArtistHub = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState('');
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
+  const handleApplyCoupon = async (e) => {
+    if (e) e.preventDefault();
+    if (!couponCode.trim()) return;
+    setCouponError('');
+    setValidatingCoupon(true);
+    try {
+      const res = await couponsAPI.validateCoupon(
+        couponCode.trim(),
+        999,
+        'membership',
+        formData.email
+      );
+      if (res && res.valid) {
+        setAppliedCoupon({
+          code: res.coupon.code,
+          discount: res.discount,
+          finalAmount: res.finalAmount
+        });
+        setCouponCode('');
+      } else {
+        setCouponError(res?.error || 'Invalid coupon code');
+      }
+    } catch (err) {
+      setCouponError(err.response?.data?.error || 'Invalid or expired coupon code');
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponError('');
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -376,6 +415,72 @@ const ArtistHub = () => {
                     <p className="mt-1 text-sm text-red-600">{errors.aadharName}</p>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* Membership Fee & Coupon Code Section */}
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-3">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-600 font-medium">Annual Artist Membership Fee:</span>
+                <span className="font-semibold text-gray-900">₹999</span>
+              </div>
+
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs">
+                  <div className="flex items-center gap-2 text-emerald-800">
+                    <Sparkles size={16} className="text-emerald-600" />
+                    <div>
+                      <span className="font-mono font-bold uppercase bg-emerald-100 px-2 py-0.5 rounded">
+                        {appliedCoupon.code}
+                      </span>
+                      <span className="ml-2 font-semibold">(-₹{appliedCoupon.discount} OFF)</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    className="text-red-600 hover:text-red-800 font-bold"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Tag size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Have a coupon code?"
+                      value={couponCode}
+                      onChange={(e) => {
+                        setCouponCode(e.target.value.toUpperCase());
+                        setCouponError('');
+                      }}
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg font-mono uppercase focus:outline-none focus:ring-2 focus:ring-black"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    disabled={validatingCoupon || !couponCode.trim()}
+                    className="px-4 py-2 bg-black text-white text-sm font-semibold rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                  >
+                    {validatingCoupon ? 'Validating...' : 'Apply'}
+                  </button>
+                </div>
+              )}
+
+              {couponError && (
+                <p className="text-xs text-red-600 flex items-center gap-1">
+                  <AlertCircle size={14} /> {couponError}
+                </p>
+              )}
+
+              <div className="flex justify-between items-center text-base font-bold pt-2 border-t border-gray-200">
+                <span>Total Payable:</span>
+                <span className="text-red-600 text-lg">
+                  ₹{appliedCoupon ? appliedCoupon.finalAmount.toLocaleString() : '999'}
+                </span>
               </div>
             </div>
 

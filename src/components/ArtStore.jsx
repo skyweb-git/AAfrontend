@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState, useRef, useCallback, memo } from 'react';
 
-import { Search, ArrowLeft, MapPin, X, User, ChevronRight, Instagram, Facebook, Globe, MessageSquare, Share2, Heart, Palette, Briefcase, ArrowUp, Check, Copy, MessageCircle } from 'lucide-react';
+import { Search, ArrowLeft, MapPin, X, User, ChevronRight, Instagram, Facebook, Globe, MessageSquare, Share2, Heart, Palette, Briefcase, ArrowUp, Check, Copy, MessageCircle, ShoppingBag, Store } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { productsAPI } from '../services/api';
+import { productsAPI, ecommerceAPI } from '../services/api';
 import SEO from './SEO';
 
 const normalizeCategory = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -134,7 +134,7 @@ const useResponsiveColumnCount = () => {
 };
 
 // ── Stable Masonry Grid (flexbox columns, no reflow on append) ───────────────
-const StableMasonryGrid = memo(({ products, loading, columnCount, onOpenPreview, onShare }) => {
+const StableMasonryGrid = memo(({ products, loading, columnCount, onOpenPreview, onShare, onBuyArtwork }) => {
   const columns = useStableColumns(products, columnCount);
 
   if (loading && products.length === 0) {
@@ -222,30 +222,68 @@ const StableMasonryGrid = memo(({ products, loading, columnCount, onOpenPreview,
                         {String(product.category || '').toUpperCase()}
                       </span>
                     </div>
+
+                    {/* Status badge */}
+                    {product.status === 'sold' ? (
+                      <div className="absolute top-3 right-3">
+                        <span className="px-2.5 py-0.5 bg-gray-900/90 text-white text-[10px] font-bold uppercase rounded-full shadow-sm">
+                          SOLD
+                        </span>
+                      </div>
+                    ) : product.status === 'available' && product.price > 0 ? (
+                      <div className="absolute top-3 right-3">
+                        <span className="px-2.5 py-0.5 bg-emerald-600/90 text-white text-[10px] font-bold uppercase rounded-full shadow-sm">
+                          FOR SALE
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
 
                   {/* Info */}
                   <div className="p-4">
-                    <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors line-clamp-2 mb-2 text-sm">
-                      {product.name}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      {product?.artistProfile?.image?.url || product?.artist?.photoURL ? (
-                        <img
-                          src={product?.artistProfile?.image?.url || product?.artist?.photoURL}
-                          alt="Artist"
-                          loading="lazy"
-                          decoding="async"
-                          className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 border border-gray-100 flex-shrink-0">
-                          <User size={12} />
-                        </div>
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors line-clamp-2 text-sm">
+                        {product.name}
+                      </h3>
+                      {product.price > 0 && (
+                        <span className="text-sm font-extrabold text-emerald-700 whitespace-nowrap">
+                          ₹{Number(product.price).toLocaleString('en-IN')}
+                        </span>
                       )}
-                      <span className="text-xs text-gray-500 truncate">
-                        {product?.artistProfile?.name || product?.artist?.displayName || 'Unknown Artist'}
-                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {product?.artistProfile?.image?.url || product?.artist?.photoURL ? (
+                          <img
+                            src={product?.artistProfile?.image?.url || product?.artist?.photoURL}
+                            alt="Artist"
+                            loading="lazy"
+                            decoding="async"
+                            className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 border border-gray-100 flex-shrink-0">
+                            <User size={12} />
+                          </div>
+                        )}
+                        <span className="text-xs text-gray-500 truncate">
+                          {product?.artistProfile?.name || product?.artist?.displayName || 'Unknown Artist'}
+                        </span>
+                      </div>
+
+                      {product.status === 'available' && product.price > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onBuyArtwork) onBuyArtwork(product);
+                          }}
+                          className="inline-flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-sm hover:shadow transition-all duration-200 active:scale-95 flex-shrink-0"
+                          title="Buy this artwork"
+                        >
+                          <ShoppingBag size={12} />
+                          <span>Buy</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -271,9 +309,103 @@ const ArtStore = () => {
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [search, setSearch] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Live suggestions from loaded products & artist names
+  const suggestions = useMemo(() => {
+    if (!searchTerm || searchTerm.trim().length < 1) return [];
+    const term = searchTerm.trim().toLowerCase();
+    const matches = new Set();
+
+    products.forEach(p => {
+      if (p.name && p.name.toLowerCase().includes(term)) {
+        matches.add(p.name);
+      }
+      const artistName = p.artistProfile?.name || p.artist?.displayName;
+      if (artistName && artistName.toLowerCase().includes(term)) {
+        matches.add(artistName);
+      }
+    });
+
+    return Array.from(matches).slice(0, 6);
+  }, [searchTerm, products]);
   const [selectedPill, setSelectedPill] = useState('All');
   const [previewItem, setPreviewItem] = useState(null);
   const [previewArtist, setPreviewArtist] = useState(null);
+
+  // Cashfree E-Commerce Buy Modal State
+  const [buyModal, setBuyModal] = useState({ open: false, product: null });
+  const [buyForm, setBuyForm] = useState({ name: '', email: '', phone: '', address: '' });
+  const [buyLoading, setBuyLoading] = useState(false);
+  const [buyError, setBuyError] = useState('');
+
+  // Dynamically load Cashfree SDK
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+    script.async = true;
+    document.body.appendChild(script);
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  const handleBuyArtwork = (product) => {
+    setBuyError('');
+    setBuyForm({ name: '', email: '', phone: '', address: '' });
+    setBuyModal({ open: true, product });
+  };
+
+  const handleBuySubmit = async (e) => {
+    e.preventDefault();
+    if (!buyModal.product) return;
+    if (!buyForm.name.trim() || !buyForm.email.trim() || !buyForm.phone.trim()) {
+      setBuyError('Full Name, Email, and Phone number are required.');
+      return;
+    }
+    setBuyLoading(true);
+    setBuyError('');
+
+    try {
+      const resolvedArtistId = buyModal.product?.artistProfile?._id || buyModal.product?.artistProfile || buyModal.product?.artist?._id || buyModal.product?.artist;
+      const res = await ecommerceAPI.createPurchaseSession({
+        productId: buyModal.product._id || buyModal.product.id,
+        artistId: resolvedArtistId,
+        buyerName: buyForm.name.trim(),
+        buyerEmail: buyForm.email.trim(),
+        buyerPhone: buyForm.phone.trim(),
+        shippingAddress: { street: buyForm.address.trim(), country: 'India' }
+      });
+
+      if (res && res.paymentSessionId) {
+        if (typeof window.Cashfree === 'undefined') {
+          setBuyError('Cashfree gateway is loading, please try again in a moment.');
+          setBuyLoading(false);
+          return;
+        }
+
+        const cashfree = window.Cashfree({
+          mode: res.environment === 'PRODUCTION' ? 'production' : 'sandbox'
+        });
+
+        cashfree.checkout({
+          paymentSessionId: res.paymentSessionId,
+          returnUrl: `${window.location.origin}/ecommerce-success?order_id=${res.orderId}&product=${encodeURIComponent(buyModal.product.name || '')}`
+        });
+
+        setBuyModal({ open: false, product: null });
+      } else {
+        setBuyError(res?.error || 'Failed to initialize payment.');
+      }
+    } catch (err) {
+      console.error('Buy artwork error:', err);
+      setBuyError(err?.response?.data?.error || err.message || 'Payment initiation failed.');
+    } finally {
+      setBuyLoading(false);
+    }
+  };
 
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -461,12 +593,27 @@ const ArtStore = () => {
   const pills = ['All', 'Painting', 'Digital Art', 'Sculpture', 'Photography', 'Print', 'Supplies', 'Other'];
 
   const filteredProducts = useMemo(() => {
-    if (selectedPill === 'All') return products;
-    const acceptedCategories = pillToCategory[selectedPill];
-    if (!acceptedCategories) return products;
-    return products.filter((p) => {
-      const productCategory = normalizeCategory(p?.category);
-      return acceptedCategories.includes(productCategory);
+    let list = products;
+    if (selectedPill !== 'All') {
+      const acceptedCategories = pillToCategory[selectedPill];
+      if (acceptedCategories) {
+        list = products.filter((p) => {
+          const productCategory = normalizeCategory(p?.category);
+          return acceptedCategories.includes(productCategory);
+        });
+      }
+    }
+
+    // Prioritize artworks with BUY option (available and priced) at the very top!
+    return [...list].sort((a, b) => {
+      const aCanBuy = a?.status === 'available' && Number(a?.price) > 0;
+      const bCanBuy = b?.status === 'available' && Number(b?.price) > 0;
+
+      if (aCanBuy && !bCanBuy) return -1;
+      if (!aCanBuy && bCanBuy) return 1;
+
+      // When both can buy (or both cannot buy), newest first
+      return new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0);
     });
   }, [products, selectedPill]);
 
@@ -586,9 +733,40 @@ const ArtStore = () => {
                 type="text"
                 placeholder="Search for art, artists, or styles..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-100 border border-gray-200 rounded-full focus:outline-none focus:border-red-500 focus:bg-white transition-all"
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                className="w-full pl-12 pr-4 py-3 bg-gray-100 border border-gray-200 rounded-full focus:outline-none focus:border-red-500 focus:bg-white transition-all shadow-sm"
               />
+              {/* Search suggestions dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="p-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest px-4 pt-3">
+                    Matching Artworks & Artists
+                  </div>
+                  {suggestions.map((sug, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setSearchTerm(sug);
+                        setShowSuggestions(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 hover:bg-red-50 flex items-center justify-between text-sm text-gray-800 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Search size={14} className="text-gray-400 group-hover:text-red-500 transition-colors" />
+                        <span className="font-semibold group-hover:text-red-600 transition-colors">{sug}</span>
+                      </div>
+                      <span className="text-[11px] text-gray-400 font-medium">Search</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -635,6 +813,7 @@ const ArtStore = () => {
             columnCount={columnCount}
             onOpenPreview={handleOpenPreview}
             onShare={handleShare}
+            onBuyArtwork={handleBuyArtwork}
           />
         )}
         </div>
@@ -833,8 +1012,17 @@ const ArtStore = () => {
                 )}
               </div>
 
-              {/* Footer: Contact */}
+              {/* Footer: Buy and Contact */}
               <div className="p-6 md:p-8 bg-white border-t border-gray-100 mt-auto shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+                {previewItem.status === 'available' && previewItem.price > 0 && (
+                  <button
+                    onClick={() => handleBuyArtwork(previewItem)}
+                    className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-2xl font-black transition-all shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 active:scale-95 mb-3"
+                  >
+                    <ShoppingBag className="w-5 h-5" />
+                    <span>Buy Artwork — ₹{Number(previewItem.price).toLocaleString('en-IN')}</span>
+                  </button>
+                )}
                 <button 
                   onClick={() => {
                     if (!isAuthenticated) {
@@ -1062,6 +1250,129 @@ const ArtStore = () => {
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-gray-900/95 backdrop-blur-md text-white px-6 py-3 rounded-full text-sm font-bold shadow-2xl border border-gray-700/50 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-5 duration-300">
           <Check size={18} className="text-green-400" />
           <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Cashfree E-Commerce Purchase Modal */}
+      {buyModal.open && buyModal.product && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-red-600 to-rose-700 p-6 text-white">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-red-200 text-xs font-bold uppercase tracking-wider mb-1">
+                    <Store size={14} />
+                    <span>Official Artwork Purchase</span>
+                  </div>
+                  <h3 className="text-xl font-black text-white">{buyModal.product.name}</h3>
+                  <p className="text-red-100 text-xs mt-0.5">
+                    By {buyModal.product?.artistProfile?.name || buyModal.product?.artist?.displayName || 'Artist'}
+                  </p>
+                </div>
+                {buyModal.product.price > 0 && (
+                  <div className="bg-white/20 backdrop-blur-md px-3.5 py-1.5 rounded-xl text-right">
+                    <div className="text-[10px] uppercase font-bold text-red-100">Price</div>
+                    <div className="text-lg font-black text-white">₹{Number(buyModal.product.price).toLocaleString('en-IN')}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleBuySubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={buyForm.name}
+                  onChange={(e) => setBuyForm({ ...buyForm, name: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="Your full name"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={buyForm.email}
+                    onChange={(e) => setBuyForm({ ...buyForm, email: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    placeholder="you@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Mobile Number *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={buyForm.phone}
+                    onChange={(e) => setBuyForm({ ...buyForm, phone: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    placeholder="10-digit mobile"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Delivery Address *
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={buyForm.address}
+                  onChange={(e) => setBuyForm({ ...buyForm, address: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                  placeholder="Street, City, State, PIN code"
+                />
+              </div>
+
+              {buyError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-medium text-red-600">
+                  {buyError}
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBuyModal({ open: false, product: null })}
+                  className="flex-1 py-3 px-4 rounded-xl border border-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={buyLoading}
+                  className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-sm shadow-lg shadow-red-500/30 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {buyLoading ? (
+                    <span>Opening Gateway...</span>
+                  ) : (
+                    <>
+                      <ShoppingBag size={16} />
+                      <span>Pay ₹{Number(buyModal.product.price || 0).toLocaleString('en-IN')}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 pt-2 text-[11px] text-gray-400 font-medium">
+                <span>🔒 Secured via Cashfree Payment Gateway</span>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

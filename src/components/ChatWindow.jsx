@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
+import { useNavigate } from 'react-router-dom';
 import {
   Send,
   MoreVertical,
@@ -25,7 +26,8 @@ const resolveSocketUrl = () => {
 
 const SOCKET_URL = resolveSocketUrl();
 
-const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partnerEmail, onBack, onNewMessage }) => {
+const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partnerEmail, partnerRole, onBack, onNewMessage }) => {
+  const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -35,6 +37,39 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
   const [socket, setSocket] = useState(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+
+  // If partner is Uday / Admin founder, map display details
+  const isUdayAdmin = 
+    partnerId?.toString() === '6a01d63b3d04d8fc5ee912b2' ||
+    partnerEmail?.toLowerCase() === 'artartistofficial@gmail.com' ||
+    partnerEmail?.toLowerCase() === 'artartistdata@gmail.com' ||
+    partnerName?.toLowerCase().includes('artlove') ||
+    partnerName?.toLowerCase().includes('uday');
+
+  const displayName = isUdayAdmin ? 'uday(the founder of artartist)' : (partnerName || 'Chat Partner');
+  const displayImage = isUdayAdmin ? '/uday_dp.jpeg' : partnerImage;
+
+  // Broadcast / Admin channel detection
+  const isBroadcast = 
+    isUdayAdmin ||
+    partnerRole === 'admin' ||
+    partnerEmail?.toLowerCase() === 'artartistofficial@gmail.com' ||
+    partnerEmail?.toLowerCase() === 'artartistdata@gmail.com' ||
+    partnerEmail?.toLowerCase().includes('admin') ||
+    partnerName?.toLowerCase().includes('admin') ||
+    partnerName?.toLowerCase().includes('artlove') ||
+    partnerName?.toLowerCase().trim() === 'artartist' ||
+    partnerName?.toLowerCase().trim() === 'art artist' ||
+    messages.some(m => m.senderType === 'admin');
+
+  // Navigate to profile on avatar/name click
+  const handleProfileClick = () => {
+    if (isUdayAdmin) {
+      navigate('/artist/6a11b59b27da027495f549eb');
+    } else if (partnerId) {
+      navigate(`/artist/${partnerId}`);
+    }
+  };
 
   const handleEmojiClick = (emojiData) => {
     setNewMessage(prev => prev + emojiData.emoji);
@@ -48,30 +83,14 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
 
   // Initialize Socket and Fetch History
   useEffect(() => {
-    console.log('[DEBUG] ChatWindow useEffect triggered:', {
-      currentUser: currentUser?._id,
-      currentUserEmail: currentUser?.email,
-      partnerId,
-      partnerEmail,
-      currentUserFull: currentUser,
-      partnerIdFull: partnerId
-    });
-
-    // More permissive check - only require currentUser and partnerId
+    // Only require currentUser and partnerId
     if (!currentUser || !partnerId) {
-      console.log('[DEBUG] ChatWindow early return - missing data:', {
-        hasCurrentUser: !!currentUser,
-        hasPartnerId: !!partnerId,
-        currentUserKeys: currentUser ? Object.keys(currentUser) : [],
-        currentUserType: typeof currentUser
-      });
       setLoading(false);
       return;
     }
 
     const setupSocket = (socketInstance) => {
       socketInstance.on('connect', () => {
-        console.log('✅ Chat Socket Connected:', socketInstance.id);
         const myId = currentUser?._id || currentUser?.id;
         const pId = partnerId;
 
@@ -80,26 +99,22 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
 
         // Join specific conversation room (Prefer emails for stability across IDs)
         const myEmail = currentUser?.email;
-        const pEmail = partnerEmail; // We should pass this prop
+        const pEmail = partnerEmail;
 
         let conversationId;
         if (myEmail && pEmail) {
           conversationId = [myEmail.toLowerCase(), pEmail.toLowerCase()].sort().join('_');
-          console.log(`[SOCKET] Joining robust email-based room: ${conversationId}`);
         } else {
           conversationId = [myId?.toString(), pId?.toString()].sort().join('_');
-          console.log(`[SOCKET] Joining ID-based room (email missing): ${conversationId}`);
         }
 
         socketInstance.emit('join_conversation', conversationId);
       });
 
       socketInstance.on('receive_message', (msg) => {
-        console.log('📩 New Message Received via Socket:', msg);
         const msgSenderId = (msg.sender?._id || msg.sender)?.toString();
         const currentUserId = (currentUser?._id || currentUser?.id)?.toString();
 
-        // Robust consolidated identity check via ID, User ID, email, or senderType matches
         const currentUserUserId = currentUser?.userId?.toString();
         const isMsgFromMe = msgSenderId === currentUserId || 
                             (currentUserUserId && msgSenderId === currentUserUserId) ||
@@ -108,7 +123,6 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
 
         if (!isMsgFromMe) {
           setMessages((prev) => {
-            // Robust duplicate check
             const isDuplicate = prev.some(m => m._id === msg._id || (m.text === msg.text && Math.abs(new Date(m.createdAt) - new Date(msg.createdAt)) < 2000));
             if (isDuplicate) return prev;
             return [...prev, msg];
@@ -139,43 +153,20 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const myId = currentUser?._id || currentUser?.id || currentUser?.userId;
-        console.log(`[DEBUG] ChatWindow Fetching history:`);
-        console.log(`[DEBUG] - myId: ${myId}`);
-        console.log(`[DEBUG] - partnerId: ${partnerId}`);
-        console.log(`[DEBUG] - partnerId type: ${typeof partnerId}`);
-        console.log(`[DEBUG] - currentUser:`, currentUser);
-        console.log(`[DEBUG] - API call: messagesAPI.getConversationHistory(${partnerId})`);
-
         const response = await messagesAPI.getConversationHistory(partnerId);
-        console.log(`[DEBUG] ChatWindow API Response:`);
-        console.log(`[DEBUG] - Response type: ${typeof response}`);
-        console.log(`[DEBUG] - Response:`, response);
-        console.log(`[DEBUG] - Is Array: ${Array.isArray(response)}`);
-        console.log(`[DEBUG] - Length: ${response?.length || 0}`);
 
-        // Check if response has nested data
         let messagesData = response;
         if (response && response.data && Array.isArray(response.data)) {
           messagesData = response.data;
-          console.log(`[DEBUG] Using response.data instead: ${messagesData.length} messages`);
         }
 
         if (Array.isArray(messagesData)) {
-          console.log(`[DEBUG] Setting messages state with ${messagesData.length} messages`);
           setMessages(messagesData);
         } else {
-          console.warn(`[DEBUG] Expected array but got: ${typeof messagesData}`, messagesData);
           setMessages([]);
         }
       } catch (err) {
         console.error('Failed to fetch chat history:', err);
-        console.error('Error details:', {
-          message: err.message,
-          status: err.response?.status,
-          statusText: err.response?.statusText,
-          data: err.response?.data
-        });
         setMessages([]);
       } finally {
         setLoading(false);
@@ -185,7 +176,7 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
 
     return () => newSocket.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?._id, currentUser?.id, partnerId, partnerEmail]); // Added missing dependencies
+  }, [currentUser?._id, currentUser?.id, partnerId, partnerEmail]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -193,6 +184,7 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
   }, [messages, partnerTyping]);
 
   const handleSend = async () => {
+    if (isBroadcast) return; // Disallow replying to broadcasts
     const myId = currentUser?._id || currentUser?.id;
     const pId = partnerId;
 
@@ -230,6 +222,7 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
   };
 
   const handleTyping = (e) => {
+    if (isBroadcast) return;
     setNewMessage(e.target.value);
 
     const myId = currentUser?._id || currentUser?.id;
@@ -263,86 +256,111 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0b141a] text-white overflow-hidden rounded-xl border border-gray-800 shadow-2xl">
+    <div className="flex flex-col h-full bg-white text-gray-900 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-[#202c33] border-b border-gray-700">
+      <div className="flex items-center justify-between px-4 py-3.5 bg-white border-b border-gray-200 shadow-2xs">
         <div className="flex items-center gap-3">
           {onBack && (
-            <button onClick={onBack} className="p-1 hover:bg-gray-700 rounded-full md:hidden">
-              <ChevronLeft size={24} />
+            <button onClick={onBack} className="p-1.5 hover:bg-gray-100 text-gray-600 rounded-full md:hidden transition-colors">
+              <ChevronLeft size={22} />
             </button>
           )}
-          <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden flex-shrink-0 border border-gray-600">
-              {partnerImage ? (
-                <img src={partnerImage} alt="" className="w-full h-full object-cover" />
+          
+          {/* Avatar — clickable to redirect to profile */}
+          <div 
+            onClick={handleProfileClick}
+            className="relative cursor-pointer group"
+            title="Click to view profile"
+          >
+            <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 shadow-2xs transition-transform group-hover:scale-105">
+              {displayImage ? (
+                <img src={displayImage} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-emerald-700 text-white font-bold uppercase">
-                  {(partnerName || 'A')[0]}
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-red-500 to-red-600 text-white font-bold uppercase text-sm">
+                  {(displayName || 'A')[0]}
                 </div>
               )}
             </div>
-            <div
-              title={socket?.connected ? 'Connected' : 'Disconnected (Click to retry)'}
-              onClick={() => !socket?.connected && window.location.reload()}
-              className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#202c33] cursor-pointer ${socket?.connected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 animate-pulse'}`}
-            ></div>
+            {!isBroadcast && (
+              <div
+                title={socket?.connected ? 'Connected' : 'Disconnected (Click to retry)'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  !socket?.connected && window.location.reload();
+                }}
+                className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white cursor-pointer ${
+                  socket?.connected ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]' : 'bg-red-500'
+                }`}
+              ></div>
+            )}
           </div>
+
+          {/* Name & status */}
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-sm text-gray-100">{partnerName || 'Chat Partner'}</h3>
-              <span className="text-[8px] text-gray-500 font-mono hidden md:inline">ID: {partnerId?.toString()}</span>
+            <div className="flex items-center gap-1.5">
+              <h3 
+                onClick={handleProfileClick}
+                className="font-bold text-sm text-gray-900 cursor-pointer hover:text-red-600 hover:underline transition-colors"
+                title="Click to view profile"
+              >
+                {displayName}
+              </h3>
+              {isBroadcast && (
+                <svg className="w-4 h-4 fill-[#0095f6] flex-shrink-0" viewBox="0 0 24 24" aria-label="Verified account">
+                  <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.99-3.818-3.99-.48 0-.941.1-1.358.275C14.77 2.515 13.512 1.5 12 1.5s-2.77 1.015-3.412 2.285C8.171 3.6 7.71 3.5 7.23 3.5 5.122 3.5 3.412 5.28 3.412 7.49c0 .495.084.965.238 1.4-1.273.65-2.148 2.02-2.148 3.6 0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.21 1.71 3.99 3.818 3.99.48 0 .941-.1 1.358-.275C9.23 21.485 10.488 22.5 12 22.5s2.77-1.015 3.412-2.285c.418.175.878.275 1.358.275 2.108 0 3.818-1.78 3.818-3.99 0-.495-.084-.965-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.72 4.43l-4.24-4.24 1.41-1.41 2.83 2.82 7.07-7.07 1.41 1.41-8.48 8.49z"></path>
+                </svg>
+              )}
             </div>
-            <p className="text-[10px] text-gray-400">
-              {partnerTyping ? (
-                <span className="text-green-400 animate-pulse font-medium uppercase tracking-widest text-[9px]">Typing...</span>
+            <p className="text-[10px]">
+              {isBroadcast ? (
+                <span className="text-gray-500 font-medium">Official Channel • Broadcast Only</span>
+              ) : partnerTyping ? (
+                <span className="text-red-500 animate-pulse font-semibold uppercase tracking-wider text-[9px]">Typing...</span>
               ) : (
-                <span className="text-emerald-500">{socket?.connected ? 'Online' : 'Offline'}</span>
+                <span className={socket?.connected ? 'text-emerald-600 font-medium flex items-center gap-1' : 'text-gray-400'}>
+                  {socket?.connected && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                  )}
+                  {socket?.connected ? 'Online' : 'Offline'}
+                </span>
               )}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 text-gray-400">
-          <MoreVertical size={20} className="cursor-pointer hover:text-white transition-colors" />
+        <div className="flex items-center gap-2.5 text-gray-400">
+          <button 
+            onClick={handleProfileClick}
+            className="text-xs px-2.5 py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 hover:text-red-600 border border-gray-200 rounded-lg transition-colors font-medium hidden sm:inline-flex items-center gap-1 shadow-2xs"
+            title="View Profile"
+          >
+            <span>View Profile</span>
+          </button>
+          <MoreVertical size={18} className="cursor-pointer hover:text-gray-700 transition-colors" />
         </div>
       </div>
 
       {/* Chat Background / Messages Area */}
-      <div
-        className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#0b141a] custom-scrollbar"
-        style={{
-          backgroundImage: 'url("https://w0.peakpx.com/wallpaper/818/148/HD-wallpaper-whatsapp-dark-background-w-whatsapp-dark-pattern.jpg")',
-          backgroundSize: '400px',
-          backgroundBlendMode: 'overlay'
-        }}
-      >
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 bg-[#f8f9fa] custom-scrollbar">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-full space-y-3">
-            <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-gray-400 text-xs animate-pulse">Loading secure chat...</p>
+            <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-gray-400 text-xs font-medium">Loading chat...</p>
           </div>
         ) : (
           <>
-            {console.log('[DEBUG] Message render check:', {
-              loading,
-              messagesLength: messages.length,
-              messages: messages,
-              messagesType: typeof messages,
-              isArray: Array.isArray(messages)
-            })}
             {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full space-y-2 opacity-50">
-                <div className="p-4 bg-gray-800/50 rounded-full">
-                  <UserIcon size={32} className="text-gray-500" />
+              <div className="flex flex-col items-center justify-center h-full space-y-2 opacity-60">
+                <div className="p-4 bg-white border border-gray-200 rounded-full shadow-2xs">
+                  <UserIcon size={28} className="text-gray-400" />
                 </div>
-                <p className="text-gray-400 text-sm">No messages yet. Start the conversation!</p>
+                <p className="text-gray-500 text-sm font-medium">No messages yet.</p>
               </div>
             ) : (
               messages.map((msg, idx) => {
                 const msgSenderId = msg.sender?._id || msg.sender;
                 const currentUserId = currentUser?._id || currentUser?.id;
-                
+
                 // Robust consolidated identity check via ID, User ID, email, or senderType matches
                 const currentUserUserId = currentUser?.userId?.toString();
                 const isMe = msgSenderId?.toString() === currentUserId?.toString() ||
@@ -353,19 +371,20 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
                 return (
                   <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div
-                      className={`max-w-[75%] rounded-lg px-3 py-2 shadow-md relative group transition-all duration-300 transform hover:scale-[1.01] ${isMe
-                          ? 'bg-[#005c4b] text-gray-100 rounded-tr-none'
-                          : 'bg-[#202c33] text-gray-100 rounded-tl-none'
-                        }`}
+                      className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 shadow-2xs relative group transition-all duration-200 ${
+                        isMe
+                          ? 'bg-red-600 text-white rounded-br-xs'
+                          : 'bg-white text-gray-900 border border-gray-200/80 rounded-bl-xs shadow-2xs'
+                      }`}
                     >
                       <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                      <div className="flex items-center justify-end gap-1 mt-1">
-                        <span className="text-[9px] text-gray-400">
+                      <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                        <span className={`text-[10px] ${isMe ? 'text-red-100 font-medium' : 'text-gray-400'}`}>
                           {msg.createdAt ? format(new Date(msg.createdAt), 'HH:mm') : ''}
                         </span>
                         {isMe && (
-                          <span className="text-blue-400">
-                            <CheckCheck size={12} />
+                          <span className="text-white/90">
+                            <CheckCheck size={13} />
                           </span>
                         )}
                       </div>
@@ -374,13 +393,13 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
                 );
               })
             )}
-            {partnerTyping && (
+            {partnerTyping && !isBroadcast && (
               <div className="flex justify-start">
-                <div className="bg-[#202c33] rounded-lg px-4 py-2 rounded-tl-none shadow-md">
-                  <div className="flex gap-1">
-                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                <div className="bg-white border border-gray-200/80 rounded-2xl px-4 py-3 rounded-bl-xs shadow-2xs">
+                  <div className="flex gap-1.5 items-center">
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
                   </div>
                 </div>
               </div>
@@ -390,50 +409,60 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
         )}
       </div>
 
-      {/* Input Area */}
-      <div className="p-3 bg-[#202c33] flex items-center gap-3 relative">
-        <div className="flex items-center gap-3 text-gray-400 px-1">
-          <div className="relative">
-            <Smile
-              size={24}
-              className={`cursor-pointer transition-colors ${showEmojiPicker ? 'text-emerald-500' : 'hover:text-white'}`}
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            />
-            {showEmojiPicker && (
-              <div className="absolute bottom-12 left-0 z-[100] shadow-2xl">
-                <EmojiPicker
-                  onEmojiClick={handleEmojiClick}
-                  theme="dark"
-                  searchDisabled
-                  skinTonesDisabled
-                  width={300}
-                  height={400}
-                />
-              </div>
-            )}
+      {/* Input Area / Broadcast Notice */}
+      {isBroadcast ? (
+        <div className="p-4 bg-gray-50 text-center border-t border-gray-200 select-none flex items-center justify-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full text-xs font-semibold text-gray-600 shadow-2xs">
+            <span>📢</span>
+            <span>This is an official announcement broadcast. Replies are disabled.</span>
           </div>
         </div>
-        <div className="flex-1 relative">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={handleTyping}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Type a message..."
-            className="w-full bg-[#2a3942] text-gray-100 py-2 px-4 rounded-xl focus:outline-none border border-transparent focus:border-gray-600 transition-all text-sm"
-          />
-        </div>
-        <button
-          onClick={handleSend}
-          disabled={!newMessage.trim()}
-          className={`p-2 rounded-full transition-all ${newMessage.trim()
-              ? 'bg-[#00a884] text-white scale-110 shadow-lg'
-              : 'bg-gray-700 text-gray-400'
+      ) : (
+        <div className="p-3 md:p-4 bg-white border-t border-gray-200 flex items-center gap-2 md:gap-3 relative">
+          <div className="flex items-center gap-2 text-gray-400 px-1">
+            <div className="relative">
+              <Smile
+                size={22}
+                className={`cursor-pointer transition-colors ${showEmojiPicker ? 'text-red-600' : 'hover:text-gray-600'}`}
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              />
+              {showEmojiPicker && (
+                <div className="absolute bottom-12 left-0 z-[100] shadow-xl border border-gray-200 rounded-2xl overflow-hidden">
+                  <EmojiPicker
+                    onEmojiClick={handleEmojiClick}
+                    theme="light"
+                    searchDisabled
+                    skinTonesDisabled
+                    width={300}
+                    height={400}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={handleTyping}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Type a message..."
+              className="w-full bg-gray-100 hover:bg-gray-100/80 focus:bg-white text-gray-900 placeholder-gray-400 py-2.5 px-4 rounded-xl focus:outline-none border border-transparent focus:border-red-500 focus:ring-2 focus:ring-red-100 transition-all text-sm"
+            />
+          </div>
+          <button
+            onClick={handleSend}
+            disabled={!newMessage.trim()}
+            className={`p-2.5 rounded-xl transition-all flex items-center justify-center ${
+              newMessage.trim()
+                ? 'bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/30 active:scale-95'
+                : 'bg-gray-100 text-gray-300 cursor-not-allowed'
             }`}
-        >
-          <Send size={20} />
-        </button>
-      </div>
+          >
+            <Send size={18} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
