@@ -38,15 +38,15 @@ const getDeterministicHeight = (id) => {
 
 // ── Shimmer skeleton card ────────────────────────────────────────────────────
 const SkeletonCard = ({ height }) => (
-  <div className="break-inside-avoid mb-4" aria-hidden="true">
-    <div className="rounded-2xl overflow-hidden bg-white shadow-sm">
+  <div className="break-inside-avoid min-w-0" aria-hidden="true">
+    <div className="rounded-2xl overflow-hidden bg-white shadow-sm border border-gray-100">
       <div
         className="relative overflow-hidden bg-gray-100"
         style={{ height: `${height}px` }}
       >
         <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.4s_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent" />
       </div>
-      <div className="p-4 space-y-2">
+      <div className="p-3.5 sm:p-4 space-y-2">
         <div className="h-3 w-3/4 rounded-full bg-gray-100 overflow-hidden relative">
           <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.4s_infinite_0.1s] bg-gradient-to-r from-transparent via-white/60 to-transparent" />
         </div>
@@ -112,11 +112,12 @@ const useStableColumns = (items, columnCount) => {
 
 const useResponsiveColumnCount = () => {
   const [count, setCount] = useState(() => {
-    if (typeof window === 'undefined') return 2;
+    if (typeof window === 'undefined') return 1;
     const w = window.innerWidth;
     if (w >= 1280) return 4;
     if (w >= 1024) return 3;
-    return 2;
+    if (w >= 640) return 2;
+    return 1;
   });
 
   useEffect(() => {
@@ -124,7 +125,8 @@ const useResponsiveColumnCount = () => {
       const w = window.innerWidth;
       if (w >= 1280) setCount(4);
       else if (w >= 1024) setCount(3);
-      else setCount(2);
+      else if (w >= 640) setCount(2);
+      else setCount(1);
     };
     window.addEventListener('resize', handleResize, { passive: true });
     return () => window.removeEventListener('resize', handleResize);
@@ -143,9 +145,9 @@ const StableMasonryGrid = memo(({ products, loading, columnCount, onOpenPreview,
       SKELETON_HEIGHTS.filter((_, i) => i % columnCount === colIdx)
     );
     return (
-      <div className="flex gap-3">
+      <div className="flex gap-3 sm:gap-4 w-full min-w-0">
         {skeletonCols.map((col, colIdx) => (
-          <div key={colIdx} className="flex-1 flex flex-col gap-4">
+          <div key={colIdx} className="flex-1 min-w-0 flex flex-col gap-4">
             {col.map((h, i) => (
               <SkeletonCard key={`sk-${colIdx}-${i}`} height={h} />
             ))}
@@ -156,9 +158,9 @@ const StableMasonryGrid = memo(({ products, loading, columnCount, onOpenPreview,
   }
 
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-3 sm:gap-4 w-full min-w-0">
       {columns.map((col, colIdx) => (
-        <div key={colIdx} className="flex-1 flex flex-col gap-4">
+        <div key={colIdx} className="flex-1 min-w-0 flex flex-col gap-4">
           {col.map(({ item: product, globalIndex }) => {
             const imageUrl = product?.images?.[0]?.url;
             const stableHeight = getDeterministicHeight(product._id);
@@ -167,10 +169,10 @@ const StableMasonryGrid = memo(({ products, loading, columnCount, onOpenPreview,
             return (
               <div
                 key={product._id}
-                className="group cursor-pointer"
+                className="group cursor-pointer min-w-0"
               >
                 <div
-                  className="relative overflow-hidden rounded-2xl bg-white shadow-sm hover:shadow-xl transition-all duration-300"
+                  className="relative overflow-hidden rounded-2xl bg-white shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100"
                   onClick={() => onOpenPreview(product)}
                 >
                   {/* Image */}
@@ -217,22 +219,22 @@ const StableMasonryGrid = memo(({ products, loading, columnCount, onOpenPreview,
                     </div>
 
                     {/* Category badge */}
-                    <div className="absolute top-3 left-3">
-                      <span className="px-3 py-1 bg-white/95 backdrop-blur-sm text-[10px] font-bold uppercase rounded-full shadow-sm tracking-wide">
+                    <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 max-w-[55%]">
+                      <span className="inline-block max-w-full truncate px-2.5 py-1 bg-white/95 backdrop-blur-sm text-[10px] font-bold uppercase rounded-full shadow-sm tracking-wide">
                         {String(product.category || '').toUpperCase()}
                       </span>
                     </div>
 
                     {/* Status badge */}
                     {product.status === 'sold' ? (
-                      <div className="absolute top-3 right-3">
-                        <span className="px-2.5 py-0.5 bg-gray-900/90 text-white text-[10px] font-bold uppercase rounded-full shadow-sm">
+                      <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3">
+                        <span className="px-2 py-0.5 bg-gray-900/90 text-white text-[10px] font-bold uppercase rounded-full shadow-sm">
                           SOLD
                         </span>
                       </div>
                     ) : product.status === 'available' && product.price > 0 ? (
-                      <div className="absolute top-3 right-3">
-                        <span className="px-2.5 py-0.5 bg-emerald-600/90 text-white text-[10px] font-bold uppercase rounded-full shadow-sm">
+                      <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3">
+                        <span className="px-2 py-0.5 bg-emerald-600/90 text-white text-[10px] font-bold uppercase rounded-full shadow-sm">
                           FOR SALE
                         </span>
                       </div>
@@ -240,29 +242,29 @@ const StableMasonryGrid = memo(({ products, loading, columnCount, onOpenPreview,
                   </div>
 
                   {/* Info */}
-                  <div className="p-4">
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors line-clamp-2 text-sm">
+                  <div className="p-3.5 sm:p-4">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors line-clamp-2 text-[15px] sm:text-sm min-w-0 flex-1">
                         {product.name}
                       </h3>
                       {product.price > 0 && (
-                        <span className="text-sm font-extrabold text-emerald-700 whitespace-nowrap">
+                        <span className="text-[15px] sm:text-sm font-extrabold text-emerald-700 whitespace-nowrap flex-shrink-0">
                           ₹{Number(product.price).toLocaleString('en-IN')}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between gap-2 mt-2">
-                      <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         {product?.artistProfile?.image?.url || product?.artist?.photoURL ? (
                           <img
                             src={product?.artistProfile?.image?.url || product?.artist?.photoURL}
                             alt="Artist"
                             loading="lazy"
                             decoding="async"
-                            className="w-6 h-6 rounded-full object-cover border border-gray-200 flex-shrink-0"
+                            className="w-7 h-7 sm:w-6 sm:h-6 rounded-full object-cover border border-gray-200 flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 border border-gray-100 flex-shrink-0">
+                          <div className="w-7 h-7 sm:w-6 sm:h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 border border-gray-100 flex-shrink-0">
                             <User size={12} />
                           </div>
                         )}
@@ -277,10 +279,10 @@ const StableMasonryGrid = memo(({ products, loading, columnCount, onOpenPreview,
                             e.stopPropagation();
                             if (onBuyArtwork) onBuyArtwork(product);
                           }}
-                          className="inline-flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg shadow-sm hover:shadow transition-all duration-200 active:scale-95 flex-shrink-0"
+                          className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm hover:shadow transition-all duration-200 active:scale-95 flex-shrink-0"
                           title="Buy this artwork"
                         >
-                          <ShoppingBag size={12} />
+                          <ShoppingBag size={13} />
                           <span>Buy</span>
                         </button>
                       )}
@@ -703,32 +705,32 @@ const ArtStore = () => {
       <div className="min-h-screen bg-white">
 
       {/* Header */}
-      <div className="bg-black py-8 px-4 sm:px-6 lg:px-8 border-b border-gray-800">
+      <div className="bg-black py-5 sm:py-8 px-4 sm:px-6 lg:px-8 border-b border-gray-800">
         <div className="w-full max-w-6xl mx-auto text-center">
           {/* Back Button */}
-          <div className="flex justify-start mb-4">
+          <div className="flex justify-start mb-3 sm:mb-4">
             <Link 
               to="/"
               className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
             >
-              <ArrowLeft size={20} />
-              <span className="font-medium">Back to Home</span>
+              <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
+              <span className="font-medium text-sm sm:text-base">Back to Home</span>
             </Link>
           </div>
           
-          <h1 className="text-4xl font-bold mb-2"><span className="text-white">ART </span><span className="text-red-600">SHOWCASE</span></h1>
-          <p className="text-gray-300">Explore posted artworks from community</p>
+          <h1 className="text-3xl sm:text-4xl font-bold mb-1.5 sm:mb-2"><span className="text-white">ART </span><span className="text-red-600">SHOWCASE</span></h1>
+          <p className="text-gray-300 text-sm sm:text-base">Explore posted artworks from community</p>
           
 
         </div>
       </div>
 
-      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 overflow-x-hidden">
         {/* Search and Filter Bar */}
-        <div className="mb-8">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+        <div className="mb-5 sm:mb-8">
+          <div className="flex items-center gap-4 mb-4 sm:mb-6">
+            <div className="flex-1 relative min-w-0">
+              <Search className="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
                 placeholder="Search for art, artists, or styles..."
@@ -739,7 +741,7 @@ const ArtStore = () => {
                 }}
                 onFocus={() => setShowSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-100 border border-gray-200 rounded-full focus:outline-none focus:border-red-500 focus:bg-white transition-all shadow-sm"
+                className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 bg-gray-100 border border-gray-200 rounded-full focus:outline-none focus:border-red-500 focus:bg-white transition-all shadow-sm text-sm sm:text-base"
               />
               {/* Search suggestions dropdown */}
               {showSuggestions && suggestions.length > 0 && (
@@ -771,12 +773,15 @@ const ArtStore = () => {
           </div>
 
           {/* Category Pills */}
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div
+            className="flex gap-2 sm:gap-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+          >
             {pills.map((category) => (
               <button
                 key={category}
                 onClick={() => handlePillClick(category)}
-                className={`px-6 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                className={`px-4 sm:px-6 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all flex-shrink-0 ${
                   category === selectedPill
                     ? 'bg-red-600 text-white shadow-md' 
                     : 'bg-white border border-gray-300 text-gray-700 hover:border-gray-400 hover:shadow-sm'

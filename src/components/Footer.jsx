@@ -14,9 +14,12 @@ const Footer = () => {
                 alt="ArtArtist"
                 className="w-9 h-9 md:w-10 md:h-10 object-contain"
               />
-              <h3 className="text-xl font-bold leading-none">
-                <span className="text-brand">ART</span>
-                <span className="text-white">ARTIST</span>
+              <h3
+                className="text-xl font-bold leading-none"
+                style={{ fontFamily: "'League Spartan', sans-serif" }}
+              >
+                <span className="text-brand">Art</span>
+                <span className="text-white">Artist</span>
               </h3>
             </div>
             <p className="text-gray-400 text-sm">

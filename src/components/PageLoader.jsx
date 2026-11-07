@@ -21,8 +21,8 @@ const PageLoader = ({ children }) => {
   return (
     <>
       {isLoading && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black transition-opacity duration-300">
-          <Loader size={240} dark />
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white transition-opacity duration-300">
+          <Loader size={240} />
         </div>
       )}
 

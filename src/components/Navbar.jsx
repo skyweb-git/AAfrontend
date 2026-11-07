@@ -55,9 +55,12 @@ const Navbar = () => {
                 alt="ArtArtist"
                 className="w-9 h-9 md:w-10 md:h-10 object-cover"
               />
-              <div className="text-lg md:text-2xl font-bold leading-none whitespace-nowrap">
-                <span className="text-brand">ART</span>
-                <span className="text-black">ARTIST</span>
+              <div
+                className="text-lg md:text-2xl font-bold leading-none whitespace-nowrap"
+                style={{ fontFamily: "'League Spartan', sans-serif" }}
+              >
+                <span className="text-brand">Art</span>
+                <span className="text-black">Artist</span>
               </div>
             </Link>
           </div>

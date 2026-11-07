@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Mic, MapPin, Palette, UserCheck, ArrowRight, Check } from 'lucide-react';
 import Navbar from './Navbar';
 import { artistsAPI } from '../services/api';
@@ -13,17 +13,87 @@ import API_URL from '../config';
 
 const ArtistsPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [artists, setArtists] = useState([]);
   const [search, setSearch] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [heroImage, setHeroImage] = useState('');
-  const [titleText, setTitleText] = useState('Discover Amazing Artists');
+  const [titleText, setTitleText] = useState('Hire an Artist');
   const [titleType, setTitleType] = useState('text');
-  const [subtitleText, setSubtitleText] = useState('Search by artist name, art form, or location to find talented creators across India');
-  const [titleAccentColor, setTitleAccentColor] = useState('#D71920');
+  const [subtitleText, setSubtitleText] = useState('Search by name, art form, or city to hire verified artists for commissions worldwide');
+  const [titleAccentColor, setTitleAccentColor] = useState('#B21717');
   const [subtitleColor, setSubtitleColor] = useState('#6B7280');
   const [artistCount, setArtistCount] = useState(0);
+
+  const pageCanonical = location.pathname === '/artists'
+    ? 'https://artartist.com/artists'
+    : 'https://artartist.com/';
+
+  const hireArtistSchema = useMemo(() => ({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebSite',
+        '@id': 'https://artartist.com/#website',
+        name: 'ArtArtist',
+        url: 'https://artartist.com',
+        description: 'Hire verified artists worldwide for custom commissions, murals, portraits, digital art, and more.',
+        publisher: { '@id': 'https://artartist.com/#organization' },
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: {
+            '@type': 'EntryPoint',
+            urlTemplate: 'https://artartist.com/artists?q={search_term_string}',
+          },
+          'query-input': 'required name=search_term_string',
+        },
+      },
+      {
+        '@type': 'Organization',
+        '@id': 'https://artartist.com/#organization',
+        name: 'ArtArtist',
+        url: 'https://artartist.com',
+        logo: {
+          '@type': 'ImageObject',
+          url: 'https://artartist.com/logo.png',
+        },
+        description: 'Global platform to hire artists and commission original artwork.',
+        sameAs: [
+          'https://www.facebook.com/artartist',
+          'https://www.instagram.com/artartist',
+          'https://www.twitter.com/artartist',
+        ],
+      },
+      {
+        '@type': 'Service',
+        '@id': 'https://artartist.com/#hire-artist',
+        name: 'Hire an Artist',
+        serviceType: 'Artist hiring and art commissioning',
+        provider: { '@id': 'https://artartist.com/#organization' },
+        areaServed: {
+          '@type': 'Place',
+          name: 'Worldwide',
+        },
+        audience: {
+          '@type': 'Audience',
+          audienceType: 'Individuals and businesses hiring artists',
+        },
+        description: 'Hire painters, muralists, digital artists, illustrators, and more. Browse portfolios and commission custom artwork online.',
+        url: pageCanonical,
+      },
+      {
+        '@type': 'WebPage',
+        '@id': `${pageCanonical}#hire-artist-page`,
+        url: pageCanonical,
+        name: 'Hire an Artist Online',
+        description: 'Find and hire verified artists globally for commissions and custom artwork.',
+        isPartOf: { '@id': 'https://artartist.com/#website' },
+        about: { '@id': 'https://artartist.com/#hire-artist' },
+        inLanguage: 'en',
+      },
+    ],
+  }), [pageCanonical]);
 
   
   const startListening = () => {
@@ -174,10 +244,11 @@ const ArtistsPage = () => {
   return (
     <>
       <SEO 
-        title="Indian Artists - ArtArtist"
-        description="Explore profiles of talented Indian artists across various art forms. Connect with artists, view portfolios, and commission custom artwork."
-        keywords="indian artists, artist profiles, find artists, artist directory, commission art"
-        canonical="https://artartist.com/artists"
+        title="Hire an Artist Online | Find & Commission Artists Globally"
+        description="Hire verified artists worldwide for custom commissions, murals, portraits, illustrations, and digital art. Search by name, art form, or city and commission with confidence on ArtArtist."
+        keywords="hire artist, hire an artist, hire artist online, commission an artist, artist for hire, find artists, freelance artist, hire painter, hire mural artist, hire digital artist, hire illustrator, commission artwork"
+        canonical={pageCanonical}
+        schema={hireArtistSchema}
       />
       <div className="min-h-screen bg-[#f8f9fa] flex flex-col">
         <Navbar />
@@ -195,7 +266,7 @@ const ArtistsPage = () => {
                   <div className="flex items-center justify-center mb-4">
                     <img
                       src={heroImage}
-                      alt="ArtArtist"
+                      alt="Hire an artist on ArtArtist"
                       className="max-h-32 md:max-h-48 w-auto object-contain"
                       onError={(e) => {
                         e.target.style.display = 'none';
