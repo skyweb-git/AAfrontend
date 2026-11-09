@@ -26,7 +26,42 @@ const resolveSocketUrl = () => {
 
 const SOCKET_URL = resolveSocketUrl();
 
-const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partnerEmail, partnerRole, onBack, onNewMessage }) => {
+const ADMIN_IDS = new Set(['6a01d63b3d04d8fc5ee912b2']);
+const ADMIN_EMAILS = new Set([
+  'artartistofficial@gmail.com',
+  'artartistdata@gmail.com'
+]);
+
+const isSameIdentity = (msg, currentUser) => {
+  const msgSenderId = (msg.sender?._id || msg.sender)?.toString();
+  const currentUserId = (currentUser?._id || currentUser?.id)?.toString();
+  const currentUserUserId = currentUser?.userId?.toString();
+
+  return (
+    msgSenderId === currentUserId ||
+    (currentUserUserId && msgSenderId === currentUserUserId) ||
+    (msg.sender?.email &&
+      currentUser?.email &&
+      msg.sender.email.toLowerCase() === currentUser.email.toLowerCase())
+  );
+};
+
+const getEmojiPickerWidth = () => {
+  if (typeof window === 'undefined') return 300;
+  return Math.min(300, window.innerWidth - 32);
+};
+
+const ChatWindow = ({
+  currentUser,
+  partnerId,
+  partnerName,
+  partnerImage,
+  partnerEmail,
+  partnerRole,
+  socket: sharedSocket,
+  onBack,
+  onNewMessage
+}) => {
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -34,33 +69,26 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
   const [isTyping, setIsTyping] = useState(false);
   const [partnerTyping, setPartnerTyping] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [socket, setSocket] = useState(null);
+  const [localSocket, setLocalSocket] = useState(null);
+  const [emojiWidth, setEmojiWidth] = useState(getEmojiPickerWidth);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
+  const socket = sharedSocket || localSocket;
+
   // If partner is Uday / Admin founder, map display details
-  const isUdayAdmin = 
-    partnerId?.toString() === '6a01d63b3d04d8fc5ee912b2' ||
-    partnerEmail?.toLowerCase() === 'artartistofficial@gmail.com' ||
-    partnerEmail?.toLowerCase() === 'artartistdata@gmail.com' ||
-    partnerName?.toLowerCase().includes('artlove') ||
-    partnerName?.toLowerCase().includes('uday');
+  const isUdayAdmin =
+    ADMIN_IDS.has(partnerId?.toString()) ||
+    ADMIN_EMAILS.has(partnerEmail?.toLowerCase());
 
   const displayName = isUdayAdmin ? 'uday(the founder of artartist)' : (partnerName || 'Chat Partner');
   const displayImage = isUdayAdmin ? '/uday_dp.jpeg' : partnerImage;
 
-  // Broadcast / Admin channel detection
-  const isBroadcast = 
+  // Broadcast / Admin channel — explicit admin ids/emails/role only
+  const isBroadcast =
     isUdayAdmin ||
     partnerRole === 'admin' ||
-    partnerEmail?.toLowerCase() === 'artartistofficial@gmail.com' ||
-    partnerEmail?.toLowerCase() === 'artartistdata@gmail.com' ||
-    partnerEmail?.toLowerCase().includes('admin') ||
-    partnerName?.toLowerCase().includes('admin') ||
-    partnerName?.toLowerCase().includes('artlove') ||
-    partnerName?.toLowerCase().trim() === 'artartist' ||
-    partnerName?.toLowerCase().trim() === 'art artist' ||
-    messages.some(m => m.senderType === 'admin');
+    ADMIN_EMAILS.has(partnerEmail?.toLowerCase());
 
   // Navigate to profile on avatar/name click
   const handleProfileClick = () => {
@@ -81,6 +109,22 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
     onNewMessageRef.current = onNewMessage;
   }, [onNewMessage]);
 
+  useEffect(() => {
+    const onResize = () => setEmojiWidth(getEmojiPickerWidth());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const getConversationId = () => {
+    const myId = currentUser?._id || currentUser?.id;
+    const myEmail = currentUser?.email;
+    const pEmail = partnerEmail;
+    if (myEmail && pEmail) {
+      return [myEmail.toLowerCase(), pEmail.toLowerCase()].sort().join('_');
+    }
+    return [myId?.toString(), partnerId?.toString()].sort().join('_');
+  };
+
   // Initialize Socket and Fetch History
   useEffect(() => {
     // Only require currentUser and partnerId
@@ -89,39 +133,15 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
       return;
     }
 
-    const setupSocket = (socketInstance) => {
-      socketInstance.on('connect', () => {
+    const setupListeners = (socketInstance) => {
+      const onConnect = () => {
         const myId = currentUser?._id || currentUser?.id;
-        const pId = partnerId;
-
-        // Join individual user room for general notifications
         socketInstance.emit('join_conversation', `user_${myId}`);
+        socketInstance.emit('join_conversation', getConversationId());
+      };
 
-        // Join specific conversation room (Prefer emails for stability across IDs)
-        const myEmail = currentUser?.email;
-        const pEmail = partnerEmail;
-
-        let conversationId;
-        if (myEmail && pEmail) {
-          conversationId = [myEmail.toLowerCase(), pEmail.toLowerCase()].sort().join('_');
-        } else {
-          conversationId = [myId?.toString(), pId?.toString()].sort().join('_');
-        }
-
-        socketInstance.emit('join_conversation', conversationId);
-      });
-
-      socketInstance.on('receive_message', (msg) => {
-        const msgSenderId = (msg.sender?._id || msg.sender)?.toString();
-        const currentUserId = (currentUser?._id || currentUser?.id)?.toString();
-
-        const currentUserUserId = currentUser?.userId?.toString();
-        const isMsgFromMe = msgSenderId === currentUserId || 
-                            (currentUserUserId && msgSenderId === currentUserUserId) ||
-                            (msg.sender?.email && currentUser?.email && msg.sender.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-                            (msg.senderType === 'user' && currentUser?.role === 'user');
-
-        if (!isMsgFromMe) {
+      const onReceive = (msg) => {
+        if (!isSameIdentity(msg, currentUser)) {
           setMessages((prev) => {
             const isDuplicate = prev.some(m => m._id === msg._id || (m.text === msg.text && Math.abs(new Date(m.createdAt) - new Date(msg.createdAt)) < 2000));
             if (isDuplicate) return prev;
@@ -129,25 +149,44 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
           });
           if (onNewMessageRef.current) onNewMessageRef.current(msg);
         }
-      });
+      };
 
-      socketInstance.on('user_typing', ({ senderId }) => {
+      const onTyping = ({ senderId }) => {
         if (senderId?.toString() === partnerId?.toString()) setPartnerTyping(true);
-      });
+      };
 
-      socketInstance.on('user_stop_typing', ({ senderId }) => {
+      const onStopTyping = ({ senderId }) => {
         if (senderId?.toString() === partnerId?.toString()) setPartnerTyping(false);
-      });
+      };
+
+      if (socketInstance.connected) onConnect();
+      socketInstance.on('connect', onConnect);
+      socketInstance.on('receive_message', onReceive);
+      socketInstance.on('user_typing', onTyping);
+      socketInstance.on('user_stop_typing', onStopTyping);
+
+      return () => {
+        socketInstance.off('connect', onConnect);
+        socketInstance.off('receive_message', onReceive);
+        socketInstance.off('user_typing', onTyping);
+        socketInstance.off('user_stop_typing', onStopTyping);
+      };
     };
 
-    const newSocket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000
-    });
+    let cleanupListeners = () => {};
+    let ownedSocket = null;
 
-    setSocket(newSocket);
-    setupSocket(newSocket);
+    if (sharedSocket) {
+      cleanupListeners = setupListeners(sharedSocket) || (() => {});
+    } else {
+      ownedSocket = io(SOCKET_URL, {
+        transports: ['websocket', 'polling'],
+        reconnectionAttempts: 10,
+        reconnectionDelay: 2000
+      });
+      setLocalSocket(ownedSocket);
+      cleanupListeners = setupListeners(ownedSocket) || (() => {});
+    }
 
     // Fetch history
     const fetchHistory = async () => {
@@ -174,9 +213,15 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
     };
     fetchHistory();
 
-    return () => newSocket.disconnect();
+    return () => {
+      cleanupListeners();
+      if (ownedSocket) {
+        ownedSocket.disconnect();
+        setLocalSocket(null);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?._id, currentUser?.id, partnerId, partnerEmail]);
+  }, [currentUser?._id, currentUser?.id, partnerId, partnerEmail, sharedSocket]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -206,15 +251,7 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
 
       // 3. Stop typing via socket
       if (socket?.connected) {
-        const myEmail = currentUser?.email;
-        const pEmail = partnerEmail;
-        let conversationId;
-        if (myEmail && pEmail) {
-          conversationId = [myEmail.toLowerCase(), pEmail.toLowerCase()].sort().join('_');
-        } else {
-          conversationId = [myId.toString(), pId.toString()].sort().join('_');
-        }
-        socket.emit('stop_typing', { conversationId, senderId: myId });
+        socket.emit('stop_typing', { conversationId: getConversationId(), senderId: myId });
       }
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -230,14 +267,7 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
     if (!myId || !pId || !socket?.connected) return;
 
     try {
-      const myEmail = currentUser?.email;
-      const pEmail = partnerEmail;
-      let conversationId;
-      if (myEmail && pEmail) {
-        conversationId = [myEmail.toLowerCase(), pEmail.toLowerCase()].sort().join('_');
-      } else {
-        conversationId = [myId.toString(), pId.toString()].sort().join('_');
-      }
+      const conversationId = getConversationId();
 
       if (!isTyping) {
         setIsTyping(true);
@@ -358,18 +388,10 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
               </div>
             ) : (
               messages.map((msg, idx) => {
-                const msgSenderId = msg.sender?._id || msg.sender;
-                const currentUserId = currentUser?._id || currentUser?.id;
-
-                // Robust consolidated identity check via ID, User ID, email, or senderType matches
-                const currentUserUserId = currentUser?.userId?.toString();
-                const isMe = msgSenderId?.toString() === currentUserId?.toString() ||
-                             (currentUserUserId && msgSenderId?.toString() === currentUserUserId) ||
-                             (msg.sender?.email && currentUser?.email && msg.sender.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-                             (msg.senderType === 'user' && currentUser?.role === 'user');
+                const isMe = isSameIdentity(msg, currentUser);
 
                 return (
-                  <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  <div key={msg._id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div
                       className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 shadow-2xs relative group transition-all duration-200 ${
                         isMe
@@ -427,13 +449,16 @@ const ChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partner
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
               />
               {showEmojiPicker && (
-                <div className="absolute bottom-12 left-0 z-[100] shadow-xl border border-gray-200 rounded-2xl overflow-hidden">
+                <div
+                  className="absolute bottom-12 left-0 z-[100] shadow-xl border border-gray-200 rounded-2xl overflow-hidden"
+                  style={{ width: emojiWidth, maxWidth: 'min(300px, calc(100vw - 2rem))' }}
+                >
                   <EmojiPicker
                     onEmojiClick={handleEmojiClick}
                     theme="light"
                     searchDisabled
                     skinTonesDisabled
-                    width={300}
+                    width={emojiWidth}
                     height={400}
                   />
                 </div>

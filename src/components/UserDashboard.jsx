@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MessageSquare,
@@ -8,6 +8,7 @@ import { messagesAPI } from '../services/api';
 import SEO from './SEO';
 import ChatWindow from './ChatWindow';
 import { io } from 'socket.io-client';
+import { cn } from '../lib/utils';
 
 // Helper to resolve socket URL
 const resolveSocketUrl = () => {
@@ -17,15 +18,19 @@ const resolveSocketUrl = () => {
 
 const SOCKET_URL = resolveSocketUrl();
 
+const ADMIN_IDS = new Set(['6a01d63b3d04d8fc5ee912b2']);
+const ADMIN_EMAILS = new Set([
+  'artartistofficial@gmail.com',
+  'artartistdata@gmail.com'
+]);
+
 /** Safe avatar URL — avoids crash when partner.image is undefined but photoURL exists */
 const getPartnerAvatarUrl = (partner) => {
   if (!partner) return null;
   const pId = (partner._id || partner.id)?.toString();
   const email = partner.email?.toLowerCase();
-  const name = (partner.name || partner.displayName)?.toLowerCase();
 
-  // Uday / Admin founder DP
-  if (pId === '6a01d63b3d04d8fc5ee912b2' || email === 'artartistofficial@gmail.com' || name?.includes('artlove') || name?.includes('uday')) {
+  if (ADMIN_IDS.has(pId) || ADMIN_EMAILS.has(email)) {
     return '/uday_dp.jpeg';
   }
 
@@ -41,10 +46,21 @@ const getPartnerDisplayName = (partner) => {
   const pId = (partner._id || partner.id)?.toString();
   const email = partner.email?.toLowerCase();
   const name = partner.name || partner.displayName;
-  if (pId === '6a01d63b3d04d8fc5ee912b2' || email === 'artartistofficial@gmail.com' || name?.toLowerCase().includes('artlove') || name?.toLowerCase().includes('uday')) {
+  if (ADMIN_IDS.has(pId) || ADMIN_EMAILS.has(email)) {
     return 'uday(the founder of artartist)';
   }
   return name || 'Artist';
+};
+
+const isAdminPartner = (partner, partnerId, lastMessage) => {
+  const pId = (partnerId || partner?._id || partner?.id)?.toString();
+  const email = partner?.email?.toLowerCase();
+  return (
+    partner?.role === 'admin' ||
+    ADMIN_IDS.has(pId) ||
+    ADMIN_EMAILS.has(email) ||
+    lastMessage?.senderType === 'admin'
+  );
 };
 
 const UserDashboard = () => {
@@ -55,69 +71,160 @@ const UserDashboard = () => {
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [showMobileChat, setShowMobileChat] = useState(false);
+  const [inboxSocket, setInboxSocket] = useState(null);
+  const [viewportHeight, setViewportHeight] = useState(null);
+  const refetchTimerRef = useRef(null);
+  const conversationsRef = useRef(conversations);
+  const pendingStartChatRef = useRef(null);
+
+  conversationsRef.current = conversations;
+
+  // Capture Hire Artist payload immediately (before effects clear location.state)
+  const startChatFromNav = location.state?.startChatWith;
+  if (startChatFromNav) {
+    pendingStartChatRef.current = startChatFromNav;
+  }
 
   const isArtist = user?.role === 'artist' || user?.isArtist;
+  // Never show the empty desktop placeholder as the only mobile screen
+  const mobileShowingChat = showMobileChat && !!selectedConversation;
 
-  // ── Handle Initial Chat Trigger ───────────────────────────────────────────
+  // Keep chat composer above mobile keyboard via visualViewport
   useEffect(() => {
-    if (isAuthenticated && !loadingMessages && location.state?.startChatWith) {
-      const target = location.state.startChatWith;
-      const targetId = target._id || target.id;
+    const updateHeight = () => {
+      const h = window.visualViewport?.height ?? window.innerHeight;
+      setViewportHeight(h);
+    };
+    updateHeight();
+    window.visualViewport?.addEventListener('resize', updateHeight);
+    window.visualViewport?.addEventListener('scroll', updateHeight);
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateHeight);
+      window.visualViewport?.removeEventListener('scroll', updateHeight);
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, []);
 
-      // Check if conversation already exists
-      const existing = conversations.find(c => (c.partner?._id || c.partner?.id) === targetId);
+  // ── Handle Initial Chat Trigger (once when startChatWith is present) ───────
+  useEffect(() => {
+    if (!isAuthenticated || loadingMessages) return;
+    const target = pendingStartChatRef.current;
+    if (!target) return;
+    pendingStartChatRef.current = null;
 
-      if (existing) {
-        setSelectedConversation(existing);
-      } else {
-        // Create a temporary conversation entry
-        const avatarUrl =
-          typeof target.image === 'string'
-            ? target.image
-            : target.image?.url || target.photoURL || null;
+    const targetId = (target._id || target.id)?.toString();
+    if (!targetId) return;
 
-        const tempConv = {
-          partner: {
-            _id: targetId,
-            name: target.name,
-            displayName: target.name,
-            ...(avatarUrl ? { image: { url: avatarUrl }, photoURL: avatarUrl } : {}),
-            email: target.email
-          },
-          partnerId: targetId,
-          lastMessage: { text: 'Start a new conversation...', createdAt: new Date() },
-          unreadCount: 0,
-          isTemp: true
-        };
-        setConversations(prev => [tempConv, ...prev]);
-        setSelectedConversation(tempConv);
-      }
+    const existing = conversationsRef.current.find(
+      (c) => (c.partner?._id || c.partner?.id)?.toString() === targetId
+    );
 
-      // Clear location state to prevent re-triggering on refresh
-      window.history.replaceState({}, document.title);
+    const avatarUrl =
+      typeof target.image === 'string'
+        ? target.image
+        : target.image?.url || target.photoURL || null;
+
+    const nextSelected = existing || {
+      partner: {
+        _id: targetId,
+        name: target.name,
+        displayName: target.name,
+        ...(avatarUrl ? { image: { url: avatarUrl }, photoURL: avatarUrl } : {}),
+        email: target.email
+      },
+      partnerId: targetId,
+      lastMessage: { text: 'Start a new conversation...', createdAt: new Date() },
+      unreadCount: 0,
+      isTemp: true
+    };
+
+    if (!existing) {
+      setConversations((prev) => {
+        if (prev.some((c) => (c.partner?._id || c.partner?.id)?.toString() === targetId)) {
+          return prev;
+        }
+        return [nextSelected, ...prev];
+      });
     }
-  }, [isAuthenticated, loadingMessages, location.state, conversations]);
+
+    setSelectedConversation(nextSelected);
+    setShowMobileChat(true);
+    navigate('.', { replace: true, state: {} });
+  }, [isAuthenticated, loadingMessages, location.key, navigate]);
 
   // ── Auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) navigate('/login');
   }, [isAuthenticated, navigate]);
 
-  // ── Fetch messages from real API ──────────────────────────────────────────
+  // ── Fetch conversations only (no unused getMessages) ──────────────────────
   const fetchMessages = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoadingMessages(true);
       const convData = await messagesAPI.getConversations();
       const newConvs = Array.isArray(convData) ? convData : [];
       setConversations(newConvs);
-
-      await messagesAPI.getMessages();
     } catch (err) {
       console.warn('API error fetching messages:', err);
     } finally {
       if (!silent) setLoadingMessages(false);
     }
   }, []);
+
+  const patchInboxFromMessage = useCallback((msg) => {
+    if (!msg || !user) return;
+
+    const myId = (user._id || user.id)?.toString();
+    const myEmail = user.email?.toLowerCase();
+    const sender = msg.sender;
+    const recipient = msg.recipient;
+    const sId = (sender?._id || sender)?.toString();
+    const isMeSender =
+      sId === myId ||
+      (sender?.email && myEmail && sender.email.toLowerCase() === myEmail);
+
+    const partner = isMeSender ? recipient : sender;
+    if (!partner) return;
+
+    const partnerId = (partner._id || partner)?.toString();
+    const partnerEmail = partner.email?.toLowerCase();
+
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => {
+        const pId = (c.partner?._id || c.partner?.id)?.toString();
+        const pEmail = c.partner?.email?.toLowerCase();
+        return (
+          (partnerEmail && pEmail === partnerEmail) ||
+          pId === partnerId ||
+          c.partnerId?.toString() === partnerId
+        );
+      });
+
+      if (idx === -1) {
+        return [
+          {
+            partner: typeof partner === 'object' ? partner : { _id: partnerId },
+            partnerId,
+            lastMessage: msg,
+            unreadCount: isMeSender ? 0 : 1
+          },
+          ...prev
+        ];
+      }
+
+      const updated = [...prev];
+      const existing = updated[idx];
+      updated[idx] = {
+        ...existing,
+        lastMessage: msg,
+        unreadCount: isMeSender ? existing.unreadCount || 0 : (existing.unreadCount || 0) + 1,
+        isTemp: false
+      };
+      const [row] = updated.splice(idx, 1);
+      return [row, ...updated];
+    });
+  }, [user]);
 
   // ── Sync Selected Conversation when list updates ──────────────────────────
   useEffect(() => {
@@ -135,25 +242,43 @@ const UserDashboard = () => {
     if (isAuthenticated) fetchMessages();
   }, [isAuthenticated, fetchMessages]);
 
-  // ── Global Socket for Inbox Updates ──────────────────────────────────────
+  // ── Shared Socket for Inbox + ChatWindow ──────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated || !user) return;
 
     const myId = user._id || user.id;
     const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000
     });
 
-    socket.on('connect', () => {
+    const joinRooms = () => {
       socket.emit('join_conversation', `user_${myId}`);
+    };
+
+    socket.on('connect', joinRooms);
+
+    socket.on('new_message_notification', (msg) => {
+      // Prefer local list patch from payload; debounce full refetch as fallback
+      if (msg && (msg._id || msg.text)) {
+        patchInboxFromMessage(msg);
+        return;
+      }
+      if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+      refetchTimerRef.current = setTimeout(() => {
+        fetchMessages(true);
+      }, 400);
     });
 
-    socket.on('new_message_notification', () => {
-      fetchMessages(true);
-    });
+    setInboxSocket(socket);
 
-    return () => socket.disconnect();
-  }, [isAuthenticated, user, fetchMessages]);
+    return () => {
+      if (refetchTimerRef.current) clearTimeout(refetchTimerRef.current);
+      socket.disconnect();
+      setInboxSocket(null);
+    };
+  }, [isAuthenticated, user, fetchMessages, patchInboxFromMessage]);
 
   
   if (!isAuthenticated || !user) return null;
@@ -165,13 +290,21 @@ const UserDashboard = () => {
         description="Manage your conversations with artists."
       />
 
-      <div className="flex h-screen bg-[#f8f9fa] overflow-hidden font-sans antialiased text-gray-800">
+      <div
+        className="flex h-screen h-[100dvh] bg-[#f8f9fa] overflow-hidden font-sans antialiased text-gray-800"
+        style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
+      >
 
         {/* ── Main Content Area (Full Bleed, No Redundant Left Rail) ── */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-h-0">
 
           {/* Conversation List Sidebar */}
-          <div className={`${showMobileChat ? 'hidden' : 'flex'} w-full md:flex md:w-80 lg:w-96 bg-white flex flex-col border-r border-gray-200 shadow-sm`}>
+          <div
+            className={cn(
+              'w-full md:w-80 lg:w-96 bg-white flex flex-col border-r border-gray-200 shadow-sm',
+              mobileShowingChat && 'max-md:hidden'
+            )}
+          >
             <div className="p-4 md:p-5 flex flex-col gap-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -182,7 +315,11 @@ const UserDashboard = () => {
                   </span>
                 </div>
                 <div className="flex gap-1.5 items-center">
-                  <button onClick={fetchMessages} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-700" title="Refresh">
+                  <button
+                    onClick={() => fetchMessages()}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-700"
+                    title="Refresh"
+                  >
                     <RefreshCw size={18} className={loadingMessages ? 'animate-spin' : ''} />
                   </button>
                 </div>
@@ -230,19 +367,7 @@ const UserDashboard = () => {
                     const isSelected = selectedConversation?.partner?._id === partnerId;
                     const avatarUrl = getPartnerAvatarUrl(partner);
                     const partnerDisplayName = getPartnerDisplayName(partner);
-                    const isAdminPartner = 
-                      partner?.role === 'admin' ||
-                      partner?.email?.toLowerCase() === 'artartistofficial@gmail.com' ||
-                      partner?.email?.toLowerCase() === 'artartistdata@gmail.com' ||
-                      partner?.email?.toLowerCase().includes('admin') ||
-                      partner?.name?.toLowerCase().includes('admin') ||
-                      partner?.displayName?.toLowerCase().includes('admin') ||
-                      partner?.name?.toLowerCase().includes('artlove') ||
-                      partner?.displayName?.toLowerCase().includes('artlove') ||
-                      partner?.name?.toLowerCase().trim() === 'artartist' ||
-                      partner?.displayName?.toLowerCase().trim() === 'artartist' ||
-                      partnerId?.toString() === '6a01d63b3d04d8fc5ee912b2' ||
-                      lastMessage?.senderType === 'admin';
+                    const adminPartner = isAdminPartner(partner, partnerId, lastMessage);
 
                     return (
                       <div
@@ -290,7 +415,7 @@ const UserDashboard = () => {
                           <div className="flex justify-between items-baseline mb-1">
                             <h4 className={`text-sm font-bold truncate flex items-center gap-1.5 ${isSelected ? 'text-red-600 font-extrabold' : 'text-gray-900'}`}>
                               <span>{partnerDisplayName}</span>
-                              {isAdminPartner && (
+                              {adminPartner && (
                                 <svg className="w-3.5 h-3.5 fill-[#0095f6] flex-shrink-0" viewBox="0 0 24 24" aria-label="Verified account">
                                   <path d="M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.99-3.818-3.99-.48 0-.941.1-1.358.275C14.77 2.515 13.512 1.5 12 1.5s-2.77 1.015-3.412 2.285C8.171 3.6 7.71 3.5 7.23 3.5 5.122 3.5 3.412 5.28 3.412 7.49c0 .495.084.965.238 1.4-1.273.65-2.148 2.02-2.148 3.6 0 1.58.875 2.95 2.148 3.6-.154.435-.238.905-.238 1.4 0 2.21 1.71 3.99 3.818 3.99.48 0 .941-.1 1.358-.275C9.23 21.485 10.488 22.5 12 22.5s2.77-1.015 3.412-2.285c.418.175.878.275 1.358.275 2.108 0 3.818-1.78 3.818-3.99 0-.495-.084-.965-.238-1.4 1.273-.65 2.148-2.02 2.148-3.6zm-12.72 4.43l-4.24-4.24 1.41-1.41 2.83 2.82 7.07-7.07 1.41 1.41-8.48 8.49z"></path>
                                 </svg>
@@ -321,7 +446,12 @@ const UserDashboard = () => {
           </div>
 
           {/* Chat Window Container */}
-          <div className={`${showMobileChat ? 'flex' : 'hidden'} md:flex flex-1 bg-[#f8f9fa] relative flex flex-col`}>
+          <div
+            className={cn(
+              'flex-1 bg-[#f8f9fa] relative flex-col min-h-0',
+              mobileShowingChat ? 'flex' : 'hidden md:flex'
+            )}
+          >
             {selectedConversation ? (
               <ChatWindow
                 currentUser={user}
@@ -330,10 +460,9 @@ const UserDashboard = () => {
                 partnerImage={getPartnerAvatarUrl(selectedConversation.partner)}
                 partnerEmail={selectedConversation.partner?.email}
                 partnerRole={selectedConversation.partner?.role}
+                socket={inboxSocket}
                 onBack={() => setShowMobileChat(false)}
-                onNewMessage={() => {
-                  fetchMessages(true); // Silent refresh
-                }}
+                onNewMessage={patchInboxFromMessage}
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-8">

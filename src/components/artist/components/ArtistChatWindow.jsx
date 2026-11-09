@@ -1,3 +1,10 @@
+/**
+ * ArtistChatWindow — standalone chat pane for artist ↔ collector threads.
+ *
+ * Inbox note: the product inbox lives at `/dashboard` (UserDashboard).
+ * Artists signed into the main app should use `/dashboard` for messaging.
+ * This component is available if an artist-dashboard messages tab is added later.
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { 
@@ -14,6 +21,31 @@ import { messagesAPI } from '../services/api';
 // In Webpack/Create React App, use process.env
 const SOCKET_URL = process.env.REACT_APP_API_URL?.replace('/api', '') || 'https://sverxiioo.nanoprofiles.com';
 
+const ADMIN_IDS = new Set(['6a01d63b3d04d8fc5ee912b2']);
+const ADMIN_EMAILS = new Set([
+  'artartistofficial@gmail.com',
+  'artartistdata@gmail.com'
+]);
+
+const isSameIdentity = (msg, currentUser) => {
+  const msgSenderId = (msg.sender?._id || msg.sender)?.toString();
+  const currentUserId = (currentUser?._id || currentUser?.id)?.toString();
+  const currentUserUserId = currentUser?.userId?.toString();
+
+  return (
+    msgSenderId === currentUserId ||
+    (currentUserUserId && msgSenderId === currentUserUserId) ||
+    (msg.sender?.email &&
+      currentUser?.email &&
+      msg.sender.email.toLowerCase() === currentUser.email.toLowerCase())
+  );
+};
+
+const getEmojiPickerWidth = () => {
+  if (typeof window === 'undefined') return 300;
+  return Math.min(300, window.innerWidth - 32);
+};
+
 const ArtistChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, partnerEmail, onBack, onNewMessage }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -23,23 +55,24 @@ const ArtistChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, p
   /* eslint-disable-next-line no-unused-vars */
   const [loading, setLoading] = useState(false);
   const [socket, setSocket] = useState(null);
+  const [emojiWidth, setEmojiWidth] = useState(getEmojiPickerWidth);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  const isBroadcast = 
-    partnerEmail?.toLowerCase() === 'artartistofficial@gmail.com' || 
-    partnerEmail?.toLowerCase() === 'artartistdata@gmail.com' || 
-    partnerEmail?.toLowerCase().includes('admin') ||
-    partnerName?.toLowerCase().includes('admin') ||
-    partnerName?.toLowerCase().includes('artlove') ||
-    partnerName?.toLowerCase().trim() === 'artartist' || 
-    partnerName?.toLowerCase().trim() === 'art artist' ||
-    messages.some(m => m.senderType === 'admin');
+  const isBroadcast =
+    ADMIN_IDS.has(partnerId?.toString()) ||
+    ADMIN_EMAILS.has(partnerEmail?.toLowerCase());
 
   const handleEmojiClick = (emojiData) => {
     setNewMessage(prev => prev + emojiData.emoji);
     setShowEmojiPicker(false);
   };
+
+  useEffect(() => {
+    const onResize = () => setEmojiWidth(getEmojiPickerWidth());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Initialize Socket and Fetch History
   useEffect(() => {
@@ -50,42 +83,26 @@ const ArtistChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, p
 
     const setupSocket = (socketInstance) => {
       socketInstance.on('connect', () => {
-        console.log('✅ Artist Socket Connected:', socketInstance.id);
         const myId = currentUser?._id || currentUser?.id;
         const pId = partnerId;
 
-        // Join individual user room for general notifications
         socketInstance.emit('join_conversation', `user_${myId}`);
 
-        // Join specific conversation room (Prefer emails for stability across IDs)
         const myEmail = currentUser?.email;
         const pEmail = partnerEmail;
 
         let conversationId;
         if (myEmail && pEmail) {
           conversationId = [myEmail.toLowerCase(), pEmail.toLowerCase()].sort().join('_');
-          console.log(`[SOCKET] Artist joining robust email-based room: ${conversationId}`);
         } else {
           conversationId = [myId?.toString(), pId?.toString()].sort().join('_');
-          console.log(`[SOCKET] Artist joining ID-based room (email missing): ${conversationId}`);
         }
         
         socketInstance.emit('join_conversation', conversationId);
       });
 
       socketInstance.on('receive_message', (msg) => {
-        console.log('📩 Artist Received Message:', msg);
-        const msgSenderId = (msg.sender?._id || msg.sender)?.toString();
-        const currentUserId = (currentUser?._id || currentUser?.id)?.toString();
-        
-        // Robust consolidated identity check via ID, User ID, email, or senderType matches
-        const currentUserUserId = currentUser?.userId?.toString();
-        const isMsgFromMe = msgSenderId === currentUserId || 
-                            (currentUserUserId && msgSenderId === currentUserUserId) ||
-                            (msg.sender?.email && currentUser?.email && msg.sender.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-                            (msg.senderType === 'artist');
-        
-        if (!isMsgFromMe) {
+        if (!isSameIdentity(msg, currentUser)) {
           setMessages((prev) => {
             const isDuplicate = prev.some(m => m._id === msg._id || (m.text === msg.text && Math.abs(new Date(m.createdAt) - new Date(msg.createdAt)) < 2000));
             if (isDuplicate) return prev;
@@ -138,6 +155,7 @@ const ArtistChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, p
   }, [messages, partnerTyping]);
 
   const handleSend = async () => {
+    if (isBroadcast) return;
     const myId = currentUser?._id || currentUser?.id;
     const pId = partnerId;
     if (!newMessage.trim() || !myId || !pId) return;
@@ -174,6 +192,7 @@ const ArtistChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, p
   };
 
   const handleTyping = (e) => {
+    if (isBroadcast) return;
     setNewMessage(e.target.value);
     const myId = currentUser?._id || currentUser?.id;
     const pId = partnerId;
@@ -253,18 +272,10 @@ const ArtistChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, p
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 bg-[#f8f9fa] custom-scrollbar">
         {messages.map((msg, idx) => {
-          const msgSenderId = msg.sender?._id || msg.sender;
-          const currentUserId = currentUser?._id || currentUser?.id;
-          
-          // Robust consolidated identity check via ID, User ID, email, or senderType matches
-          const currentUserUserId = currentUser?.userId?.toString();
-          const isMe = msgSenderId?.toString() === currentUserId?.toString() ||
-                       (currentUserUserId && msgSenderId?.toString() === currentUserUserId) ||
-                       (msg.sender?.email && currentUser?.email && msg.sender.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-                       (msg.senderType === 'artist');
+          const isMe = isSameIdentity(msg, currentUser);
 
           return (
-            <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+            <div key={msg._id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
               <div 
                 className={`max-w-[80%] md:max-w-[70%] rounded-2xl px-4 py-2.5 shadow-2xs relative group transition-all duration-200 ${
                   isMe 
@@ -316,13 +327,16 @@ const ArtistChatWindow = ({ currentUser, partnerId, partnerName, partnerImage, p
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
               />
               {showEmojiPicker && (
-                <div className="absolute bottom-12 left-0 z-[100] shadow-xl border border-gray-200 rounded-2xl overflow-hidden">
+                <div
+                  className="absolute bottom-12 left-0 z-[100] shadow-xl border border-gray-200 rounded-2xl overflow-hidden"
+                  style={{ width: emojiWidth, maxWidth: 'min(300px, calc(100vw - 2rem))' }}
+                >
                   <EmojiPicker 
                     onEmojiClick={handleEmojiClick}
                     theme="light"
                     searchDisabled
                     skinTonesDisabled
-                    width={300}
+                    width={emojiWidth}
                     height={400}
                   />
                 </div>

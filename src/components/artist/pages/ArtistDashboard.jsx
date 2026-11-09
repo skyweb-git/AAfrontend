@@ -443,6 +443,14 @@ const ArtistDashboard = () => {
                 <span className="absolute top-3 -right-2 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
               )}
             </button>
+            {/* Inbox lives on /dashboard only — ArtistChatWindow is not mounted here */}
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="py-4 px-2 font-bold text-sm uppercase tracking-widest border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-all"
+              title="Messages open in the main inbox at /dashboard"
+            >
+              Messages
+            </button>
           </div>
         </div>
       </div>

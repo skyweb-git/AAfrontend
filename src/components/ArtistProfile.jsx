@@ -5,7 +5,6 @@ import Navbar from './Navbar';
 import { artistsAPI, productsAPI, ecommerceAPI } from '../services/api';
 import SEO from './SEO';
 import Loader from './Loader';
-import MessageModal from './MessageModal';
 import { useAuth } from '../contexts/AuthContext';
 
 const ArtistProfile = () => {
@@ -17,7 +16,6 @@ const ArtistProfile = () => {
   const [activeTab, setActiveTab] = useState('artworks');
   const [likedArtworks, setLikedArtworks] = useState(new Set());
   const [previewImage, setPreviewImage] = useState(null);
-  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   // Cashfree E-Commerce Buy Modal State
   const [buyModal, setBuyModal] = useState({ open: false, artwork: null });
   const [buyForm, setBuyForm] = useState({ name: '', email: '', phone: '', address: '' });
@@ -207,7 +205,17 @@ const ArtistProfile = () => {
       navigate('/login');
       return;
     }
-    setIsMessageModalOpen(true);
+    // Prefer inbox chat (same as Art Store hire) over composing in a modal
+    navigate('/dashboard', {
+      state: {
+        startChatWith: {
+          _id: artist._id,
+          name: artist.name || artist.displayName,
+          image: artist.image?.url || artist.photoURL,
+          email: artist.email
+        }
+      }
+    });
   };
 
   const handleBuyArtwork = (e, artwork) => {
@@ -673,14 +681,6 @@ const ArtistProfile = () => {
           </div>
         </div>
       )}
-
-      {/* Message Modal */}
-      <MessageModal 
-        isOpen={isMessageModalOpen}
-        onClose={() => setIsMessageModalOpen(false)}
-        recipientId={artist._id}
-        recipientName={artist.name}
-      />
 
       {/* Cashfree E-Commerce Purchase Modal */}
       {buyModal.open && buyModal.artwork && (

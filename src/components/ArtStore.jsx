@@ -1036,13 +1036,16 @@ const ArtStore = () => {
                     }
 
                     const artistInfo = previewItem?.artistProfile || previewItem?.artist;
-                    if (artistInfo) {
+                    const artistId = (artistInfo?._id || artistInfo?.id)?.toString();
+                    if (artistInfo && artistId) {
                       navigate('/dashboard', { 
                         state: { 
                           startChatWith: {
-                            _id: artistInfo._id,
+                            _id: artistId,
                             name: artistInfo.name || artistInfo.displayName,
-                            image: artistInfo.image?.url || artistInfo.photoURL,
+                            image: typeof artistInfo.image === 'string'
+                              ? artistInfo.image
+                              : (artistInfo.image?.url || artistInfo.photoURL),
                             email: artistInfo.email
                           } 
                         } 

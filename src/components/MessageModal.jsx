@@ -1,14 +1,29 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X, Send, Loader2, MessageSquare, AlertCircle } from 'lucide-react';
 import { messagesAPI } from '../services/api';
 
-const MessageModal = ({ isOpen, onClose, recipientId, recipientName }) => {
+const MessageModal = ({ isOpen, onClose, recipientId, recipientName, recipientImage, recipientEmail }) => {
+  const navigate = useNavigate();
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
+
+  const goToInbox = () => {
+    navigate('/dashboard', {
+      state: {
+        startChatWith: {
+          _id: recipientId,
+          name: recipientName,
+          image: recipientImage,
+          email: recipientEmail
+        }
+      }
+    });
+    onClose?.();
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -17,41 +32,19 @@ const MessageModal = ({ isOpen, onClose, recipientId, recipientName }) => {
     try {
       setSending(true);
       setError('');
-      
+
       await messagesAPI.sendMessage({
         recipientId,
         text: message.trim(),
         type: 'direct_message'
       });
 
-      setSuccess(true);
       setMessage('');
-      setTimeout(() => {
-        setSuccess(false);
-        onClose();
-      }, 3000);
+      // Prefer inbox chat after a successful send (same flow as Art Store hire)
+      goToInbox();
     } catch (err) {
       console.error('Send message error:', err);
-      // Fallback for demo if API fails
-      if (err.message.includes('404') || err.message.includes('Network Error')) {
-          const mockMessages = JSON.parse(localStorage.getItem('userMessages') || '[]');
-          mockMessages.unshift({
-            id: Date.now(),
-            text: message.trim(),
-            timestamp: new Date().toISOString(),
-            sender: 'user',
-            recipientName,
-            status: 'sent'
-          });
-          localStorage.setItem('userMessages', JSON.stringify(mockMessages));
-          setSuccess(true);
-          setTimeout(() => {
-            setSuccess(false);
-            onClose();
-          }, 2000);
-      } else {
-        setError('Failed to send message. Please try again.');
-      }
+      setError(err.response?.data?.error || err.message || 'Failed to send message. Please try again.');
     } finally {
       setSending(false);
     }
@@ -79,39 +72,39 @@ const MessageModal = ({ isOpen, onClose, recipientId, recipientName }) => {
         </div>
 
         <div className="p-8">
-          {success ? (
-            <div className="py-12 text-center animate-in zoom-in duration-300">
-              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600">
-                <Send size={40} />
-              </div>
-              <h3 className="text-2xl font-black text-gray-900 mb-2">Message Sent!</h3>
-              <p className="text-gray-500">Your message has been delivered to {recipientName}.</p>
+          <form onSubmit={handleSend} className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">
+                Your Message
+              </label>
+              <textarea
+                autoFocus
+                required
+                rows="5"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder={`Write your message to ${recipientName}...`}
+                className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-red-600/50 focus:border-red-600 transition-all text-gray-800 resize-none"
+                disabled={sending}
+              ></textarea>
             </div>
-          ) : (
-            <form onSubmit={handleSend} className="space-y-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">
-                  Your Message
-                </label>
-                <textarea
-                  autoFocus
-                  required
-                  rows="5"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder={`Write your message to ${recipientName}...`}
-                  className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-red-600/50 focus:border-red-600 transition-all text-gray-800 resize-none"
-                  disabled={sending}
-                ></textarea>
+
+            {error && (
+              <div className="flex items-center gap-2 text-red-600 bg-red-50 p-4 rounded-xl border border-red-100 text-sm font-medium">
+                <AlertCircle size={18} />
+                {error}
               </div>
+            )}
 
-              {error && (
-                <div className="flex items-center gap-2 text-red-600 bg-red-50 p-4 rounded-xl border border-red-100 text-sm font-medium">
-                  <AlertCircle size={18} />
-                  {error}
-                </div>
-              )}
-
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={goToInbox}
+                className="w-full px-8 py-3 bg-gray-900 text-white font-bold rounded-2xl hover:bg-black transition-all text-sm"
+                disabled={sending}
+              >
+                Open in Messages
+              </button>
               <div className="flex gap-4">
                 <button
                   type="button"
@@ -139,8 +132,8 @@ const MessageModal = ({ isOpen, onClose, recipientId, recipientName }) => {
                   )}
                 </button>
               </div>
-            </form>
-          )}
+            </div>
+          </form>
         </div>
       </div>
     </div>
