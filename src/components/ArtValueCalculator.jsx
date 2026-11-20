@@ -3,22 +3,33 @@ import { useNavigate } from "react-router-dom";
 
 // ── Inline style helpers ──────────────────────────────────────────────────────
 const G = {
-  bg: "#0B0B0B",
-  red: "#E50914",
-  redDim: "#B8070F",
-  redGlow: "rgba(229,9,20,0.18)",
+  bg: "#fbfbf9",
+  red: "#e2382c",
+  redDim: "#c42a20",
+  redGlow: "rgba(226,56,44,0.14)",
   white: "#FFFFFF",
-  grey: "#1A1A1A",
-  greyMid: "#2A2A2A",
-  greyText: "#888",
-  greyLight: "#AAAAAA",
+  ink: "#0f0f11",
+  grey: "#ffffff",
+  inputBg: "#f1f0ec",
+  greyMid: "#e3e2dd",
+  greyText: "#66666d",
+  greyLight: "#5c5c63",
+};
+
+const PAGE_BG = {
+  backgroundColor: G.bg,
+  backgroundImage: `
+    radial-gradient(ellipse 55% 45% at 78% 42%, rgba(226,56,44,0.10) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 12% 88%, rgba(226,56,44,0.07) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 35% at 50% 8%, rgba(15,15,17,0.03) 0%, transparent 70%)
+  `,
 };
 
 const globalStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
-  body { background: ${G.bg}; color: ${G.white}; font-family: 'League Spartan', sans-serif; overflow-x: hidden; }
+  body { background: ${G.bg}; color: ${G.ink}; font-family: 'League Spartan', sans-serif; overflow-x: hidden; }
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: ${G.bg}; }
   ::-webkit-scrollbar-thumb { background: ${G.red}; border-radius: 2px; }
@@ -105,8 +116,8 @@ const NumberInput = ({ value, onChange, placeholder, prefix }) => (
       onChange={e => onChange(parseFloat(e.target.value) || 0)}
       placeholder={placeholder}
       style={{
-        width: "100%", background: G.grey, border: `1px solid ${G.greyMid}`, borderRadius: 10, padding: prefix ? "13px 14px 13px 30px" : "13px 14px",
-        color: G.white, fontSize: 15, fontFamily: "'Syne', sans-serif", fontWeight: 600, outline: "none",
+        width: "100%", background: G.inputBg, border: `1px solid ${G.greyMid}`, borderRadius: 10, padding: prefix ? "13px 14px 13px 30px" : "13px 14px",
+        color: G.ink, fontSize: 15, fontFamily: "'Syne', sans-serif", fontWeight: 600, outline: "none",
         transition: "border-color 0.2s, box-shadow 0.2s",
       }}
       onFocus={e => { e.target.style.borderColor = G.red; e.target.style.boxShadow = `0 0 0 3px ${G.redGlow}`; }}
@@ -120,16 +131,16 @@ const Select = ({ value, onChange, options }) => (
     value={value}
     onChange={e => onChange(e.target.value)}
     style={{
-      width: "100%", background: G.grey, border: `1px solid ${G.greyMid}`, borderRadius: 10, padding: "13px 40px 13px 14px",
-      color: G.white, fontSize: 14, fontFamily: "'Syne', sans-serif", fontWeight: 600, outline: "none",
+      width: "100%", background: G.inputBg, border: `1px solid ${G.greyMid}`, borderRadius: 10, padding: "13px 40px 13px 14px",
+      color: G.ink, fontSize: 14, fontFamily: "'Syne', sans-serif", fontWeight: 600, outline: "none",
       cursor: "pointer", transition: "border-color 0.2s, box-shadow 0.2s", appearance: "none",
-      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23E50914' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23e2382c' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
       backgroundRepeat: "no-repeat", backgroundPosition: "right 14px center",
     }}
     onFocus={e => { e.target.style.borderColor = G.red; e.target.style.boxShadow = `0 0 0 3px ${G.redGlow}`; }}
     onBlur={e => { e.target.style.borderColor = G.greyMid; e.target.style.boxShadow = "none"; }}
   >
-    {options.map(o => <option key={o.value} value={o.value} style={{ background: G.grey }}>{o.label}</option>)}
+    {options.map(o => <option key={o.value} value={o.value} style={{ background: G.white, color: G.ink }}>{o.label}</option>)}
   </select>
 );
 
@@ -221,53 +232,57 @@ export default function ArtValueCalculator() {
 
   // ── LANDING ──
   if (screen === "landing") return (
-    <div style={{ minHeight: "100vh", background: G.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "120px 20px 40px", position: "relative", overflow: "hidden" }}>
+    <div style={{ minHeight: "100vh", ...PAGE_BG, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "120px 20px 40px", position: "relative", overflow: "hidden" }}>
       <style>{globalStyles}</style>
-      {/* Noise texture overlay */}
-      <div style={{ position: "fixed", inset: 0, backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E\")", opacity: 0.6, pointerEvents: "none", zIndex: 0 }} />
-      {/* Red glow sphere */}
-      <div style={{ position: "absolute", top: "15%", right: "10%", width: 400, height: 400, background: `radial-gradient(circle, ${G.redGlow} 0%, transparent 70%)`, pointerEvents: "none", zIndex: 0 }} />
-      <div style={{ position: "absolute", bottom: "10%", left: "5%", width: 300, height: 300, background: `radial-gradient(circle, rgba(229,9,20,0.08) 0%, transparent 70%)`, pointerEvents: "none", zIndex: 0 }} />
 
       {/* Back Button */}
       <button 
         onClick={() => navigate(-1)} 
         style={{ position: "absolute", top: 20, left: 20, background: "transparent", border: "none", color: G.greyText, cursor: "pointer", fontSize: 14, fontFamily: "'Syne', sans-serif", display: "flex", alignItems: "center", gap: 6, transition: "color 0.2s", zIndex: 10 }}
-        onMouseEnter={e => e.currentTarget.style.color = G.white}
+        onMouseEnter={e => e.currentTarget.style.color = G.ink}
         onMouseLeave={e => e.currentTarget.style.color = G.greyText}
       >
         ← Back
       </button>
 
-      <div style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 700 }}>
-        {/* Brand badge */}
-        <div className="fade-up" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: G.grey, border: `1px solid ${G.greyMid}`, borderRadius: 40, padding: "6px 16px", marginBottom: 40 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: G.red, boxShadow: `0 0 8px ${G.red}` }} />
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: G.greyLight }}>ArtArtist · India's Artist Ecosystem</span>
-        </div>
+      <div style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 700, paddingTop: 24 }}>
+        {/* AA logo above the content */}
+        <img
+          src="/art-value-calculator-a.png?v=7"
+          alt="ArtArtist"
+          className="fade-up"
+          style={{
+            width: "clamp(88px, 14vw, 128px)",
+            height: "auto",
+            display: "block",
+            margin: "0 auto 36px",
+            opacity: 1,
+            userSelect: "none",
+          }}
+        />
 
         {/* Main headline */}
-        <h1 className="fade-up-2" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(52px, 10vw, 100px)", lineHeight: 0.92, letterSpacing: "0.02em", marginBottom: 28, background: `linear-gradient(135deg, #fff 30%, ${G.red} 80%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+        <h1 className="fade-up-2" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: "clamp(52px, 10vw, 100px)", lineHeight: 0.92, letterSpacing: "0.02em", marginBottom: 28, background: `linear-gradient(135deg, ${G.ink} 30%, ${G.red} 80%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
           Art is an Asset,<br />Not a Liability
         </h1>
 
-        <p className="fade-up-3" style={{ fontSize: "clamp(15px, 2.5vw, 19px)", color: G.greyLight, lineHeight: 1.65, maxWidth: 520, margin: "0 auto 48px", fontWeight: 400 }}>
-          Discover the <em style={{ color: G.white, fontStyle: "normal", fontWeight: 700 }}>true market value</em> of your artwork. Powered by real market logic — not guesswork.
+        <p className="fade-up-3" style={{ fontSize: "clamp(15px, 2.5vw, 19px)", color: G.greyLight, lineHeight: 1.65, maxWidth: 520, margin: "0 auto 48px", fontWeight: 400, fontFamily: "Georgia, 'Times New Roman', serif" }}>
+          Discover the <em style={{ color: G.ink, fontStyle: "normal", fontWeight: 700, fontFamily: "'Syne', sans-serif" }}>true market value</em> of your artwork. Powered by real market logic — not guesswork.
         </p>
 
         {/* CTA */}
         <div className="fade-up-4" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
           <button
             onClick={() => setScreen("calculator")}
-            style={{ background: `linear-gradient(135deg, ${G.red}, ${G.redDim})`, border: "none", borderRadius: 12, padding: "18px 48px", color: G.white, fontSize: 16, fontWeight: 800, fontFamily: "'Syne', sans-serif", letterSpacing: "0.06em", cursor: "pointer", textTransform: "uppercase", boxShadow: `0 8px 32px ${G.redGlow}, 0 2px 8px rgba(0,0,0,0.4)`, transition: "transform 0.2s, box-shadow 0.2s" }}
-            onMouseEnter={e => { e.target.style.transform = "translateY(-3px)"; e.target.style.boxShadow = `0 16px 48px ${G.redGlow}, 0 4px 16px rgba(0,0,0,0.5)`; }}
-            onMouseLeave={e => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = `0 8px 32px ${G.redGlow}, 0 2px 8px rgba(0,0,0,0.4)`; }}
+            style={{ background: `linear-gradient(135deg, ${G.red}, ${G.redDim})`, border: "none", borderRadius: 12, padding: "18px 48px", color: G.white, fontSize: 16, fontWeight: 800, fontFamily: "'Syne', sans-serif", letterSpacing: "0.06em", cursor: "pointer", textTransform: "uppercase", boxShadow: `0 8px 32px ${G.redGlow}, 0 2px 8px rgba(15,15,17,0.08)`, transition: "transform 0.2s, box-shadow 0.2s" }}
+            onMouseEnter={e => { e.target.style.transform = "translateY(-3px)"; e.target.style.boxShadow = `0 16px 48px ${G.redGlow}, 0 4px 16px rgba(15,15,17,0.12)`; }}
+            onMouseLeave={e => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = `0 8px 32px ${G.redGlow}, 0 2px 8px rgba(15,15,17,0.08)`; }}
           >
             Calculate Your Art Value →
           </button>
           {history.length > 0 && (
             <button onClick={() => setScreen("history")} style={{ background: "transparent", border: `1px solid ${G.greyMid}`, borderRadius: 10, padding: "10px 24px", color: G.greyLight, fontSize: 13, fontFamily: "'Syne', sans-serif", cursor: "pointer", transition: "all 0.2s", letterSpacing: "0.06em" }}
-              onMouseEnter={e => { e.target.style.borderColor = G.red; e.target.style.color = G.white; }}
+              onMouseEnter={e => { e.target.style.borderColor = G.red; e.target.style.color = G.ink; }}
               onMouseLeave={e => { e.target.style.borderColor = G.greyMid; e.target.style.color = G.greyLight; }}>
               View History ({history.length})
             </button>
@@ -289,13 +304,13 @@ export default function ArtValueCalculator() {
 
   // ── CALCULATOR ──
   if (screen === "calculator") return (
-    <div style={{ minHeight: "100vh", background: G.bg, padding: "30px 16px 60px" }}>
+    <div style={{ minHeight: "100vh", ...PAGE_BG, padding: "30px 16px 60px" }}>
       <style>{globalStyles}</style>
       <div style={{ maxWidth: 680, margin: "0 auto" }}>
         {/* Header */}
         <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 36 }}>
           <button onClick={() => setScreen("landing")} style={{ background: "transparent", border: "none", color: G.greyText, cursor: "pointer", fontSize: 13, fontFamily: "'Syne', sans-serif", display: "flex", alignItems: "center", gap: 6, transition: "color 0.2s" }}
-            onMouseEnter={e => e.currentTarget.style.color = G.white}
+            onMouseEnter={e => e.currentTarget.style.color = G.ink}
             onMouseLeave={e => e.currentTarget.style.color = G.greyText}>
             ← Back
           </button>
@@ -309,7 +324,7 @@ export default function ArtValueCalculator() {
         <p className="fade-up-3" style={{ color: G.greyText, fontSize: 14, marginBottom: 36, fontStyle: "italic" }}>"Art is more than time. It's meaning."</p>
 
         {/* Section: Cost Inputs */}
-        <div className="fade-up-3" style={{ background: G.grey, borderRadius: 20, padding: "24px 24px", marginBottom: 16, border: `1px solid ${G.greyMid}` }}>
+        <div className="fade-up-3" style={{ background: G.grey, borderRadius: 20, padding: "24px 24px", marginBottom: 16, border: `1px solid ${G.greyMid}`, boxShadow: "0 10px 30px rgba(15,15,17,0.05)" }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: G.red, marginBottom: 20 }}>01 · Cost Foundation</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
@@ -325,7 +340,7 @@ export default function ArtValueCalculator() {
             <Label hint="₹">Material Cost</Label>
             <NumberInput value={form.materialCost} onChange={set("materialCost")} placeholder="0" prefix="₹" />
           </div>
-          <div style={{ marginTop: 14, padding: "10px 14px", background: `rgba(229,9,20,0.06)`, borderRadius: 8, border: `1px solid rgba(229,9,20,0.15)` }}>
+          <div style={{ marginTop: 14, padding: "10px 14px", background: `rgba(226,56,44,0.06)`, borderRadius: 8, border: `1px solid rgba(226,56,44,0.15)` }}>
             <span style={{ fontSize: 12, color: G.greyText }}>Base Price → </span>
             <span style={{ fontSize: 14, fontFamily: "'JetBrains Mono', monospace", color: G.red, fontWeight: 600 }}>
               {fmt(form.timeSpent * form.hourlyRate + form.materialCost)}
@@ -334,7 +349,7 @@ export default function ArtValueCalculator() {
         </div>
 
         {/* Section: Value Multipliers */}
-        <div className="fade-up-4" style={{ background: G.grey, borderRadius: 20, padding: "24px 24px", marginBottom: 16, border: `1px solid ${G.greyMid}` }}>
+        <div className="fade-up-4" style={{ background: G.grey, borderRadius: 20, padding: "24px 24px", marginBottom: 16, border: `1px solid ${G.greyMid}`, boxShadow: "0 10px 30px rgba(15,15,17,0.05)" }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: G.red, marginBottom: 20 }}>02 · Value Multipliers</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <div>
@@ -387,13 +402,13 @@ export default function ArtValueCalculator() {
         </div>
 
         {/* Section: Selling Mode */}
-        <div className="fade-up-4" style={{ background: G.grey, borderRadius: 20, padding: "24px 24px", marginBottom: 28, border: `1px solid ${G.greyMid}` }}>
+        <div className="fade-up-4" style={{ background: G.grey, borderRadius: 20, padding: "24px 24px", marginBottom: 28, border: `1px solid ${G.greyMid}`, boxShadow: "0 10px 30px rgba(15,15,17,0.05)" }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: G.red, marginBottom: 20 }}>03 · Selling Mode</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
             {[{ value: "direct", label: "Direct", sub: "0% commission" }, { value: "platform", label: "Platform", sub: "10% commission" }, { value: "gallery", label: "Gallery", sub: "30% commission" }].map(o => (
               <button key={o.value} onClick={() => set("sellingMode")(o.value)}
-                style={{ background: form.sellingMode === o.value ? `rgba(229,9,20,0.12)` : G.greyMid, border: `2px solid ${form.sellingMode === o.value ? G.red : "transparent"}`, borderRadius: 12, padding: "14px 10px", cursor: "pointer", transition: "all 0.2s", textAlign: "center" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: form.sellingMode === o.value ? G.white : G.greyLight }}>{o.label}</div>
+                style={{ background: form.sellingMode === o.value ? `rgba(226,56,44,0.1)` : G.inputBg, border: `2px solid ${form.sellingMode === o.value ? G.red : "transparent"}`, borderRadius: 12, padding: "14px 10px", cursor: "pointer", transition: "all 0.2s", textAlign: "center" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: form.sellingMode === o.value ? G.ink : G.greyLight }}>{o.label}</div>
                 <div style={{ fontSize: 10, color: form.sellingMode === o.value ? G.red : G.greyText, marginTop: 3 }}>{o.sub}</div>
               </button>
             ))}
@@ -404,7 +419,7 @@ export default function ArtValueCalculator() {
         <button
           onClick={handleCalculate}
           disabled={loading}
-          style={{ width: "100%", background: loading ? G.greyMid : `linear-gradient(135deg, ${G.red}, ${G.redDim})`, border: "none", borderRadius: 14, padding: "20px", color: G.white, fontSize: 16, fontWeight: 800, fontFamily: "'Syne', sans-serif", letterSpacing: "0.08em", cursor: loading ? "not-allowed" : "pointer", textTransform: "uppercase", boxShadow: loading ? "none" : `0 8px 32px ${G.redGlow}`, transition: "all 0.3s", display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          style={{ width: "100%", background: loading ? G.redDim : `linear-gradient(135deg, ${G.red}, ${G.redDim})`, border: "none", borderRadius: 14, padding: "20px", color: G.white, fontSize: 16, fontWeight: 800, fontFamily: "'Syne', sans-serif", letterSpacing: "0.08em", cursor: loading ? "not-allowed" : "pointer", textTransform: "uppercase", boxShadow: loading ? "none" : `0 8px 32px ${G.redGlow}`, transition: "all 0.3s", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, opacity: loading ? 0.85 : 1 }}>
           {loading ? (
             <>
               <div style={{ width: 18, height: 18, border: `2px solid rgba(255,255,255,0.3)`, borderTopColor: G.white, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
@@ -421,19 +436,19 @@ export default function ArtValueCalculator() {
 
   // ── RESULT ──
   if (screen === "result" && result) return (
-    <div style={{ minHeight: "100vh", background: G.bg, padding: "30px 16px 60px" }}>
+    <div style={{ minHeight: "100vh", ...PAGE_BG, padding: "30px 16px 60px" }}>
       <style>{globalStyles}</style>
       <div style={{ maxWidth: 680, margin: "0 auto" }}>
         {/* Header */}
         <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 36 }}>
           <button onClick={() => setScreen("calculator")} style={{ background: "transparent", border: "none", color: G.greyText, cursor: "pointer", fontSize: 13, fontFamily: "'Syne', sans-serif", display: "flex", alignItems: "center", gap: 6, transition: "color 0.2s" }}
-            onMouseEnter={e => e.currentTarget.style.color = G.white}
+            onMouseEnter={e => e.currentTarget.style.color = G.ink}
             onMouseLeave={e => e.currentTarget.style.color = G.greyText}>
             ← Recalculate
           </button>
           <div style={{ fontFamily: "'Bebas Neue'", fontSize: 22, color: G.red, letterSpacing: "0.1em" }}>ArtArtist</div>
           <button onClick={() => setScreen("history")} style={{ background: "transparent", border: "none", color: G.greyText, cursor: "pointer", fontSize: 13, fontFamily: "'Syne', sans-serif", transition: "color 0.2s" }}
-            onMouseEnter={e => e.currentTarget.style.color = G.white}
+            onMouseEnter={e => e.currentTarget.style.color = G.ink}
             onMouseLeave={e => e.currentTarget.style.color = G.greyText}>
             History
           </button>
@@ -442,12 +457,12 @@ export default function ArtValueCalculator() {
         {/* Result card (exportable) */}
         <div ref={resultRef}>
           {/* Final Price Card */}
-          <div className="fade-up-2" style={{ background: `linear-gradient(135deg, #111 0%, #1a0305 50%, #0f0f0f 100%)`, border: `1px solid rgba(229,9,20,0.3)`, borderRadius: 24, padding: "36px 28px", marginBottom: 20, position: "relative", overflow: "hidden", textAlign: "center" }}>
+          <div className="fade-up-2" style={{ background: `linear-gradient(135deg, #ffffff 0%, #fff5f4 50%, #fbfbf9 100%)`, border: `1px solid rgba(226,56,44,0.25)`, borderRadius: 24, padding: "36px 28px", marginBottom: 20, position: "relative", overflow: "hidden", textAlign: "center", boxShadow: "0 16px 40px rgba(15,15,17,0.06)" }}>
             {/* Glow bg */}
-            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 300, height: 300, background: `radial-gradient(circle, rgba(229,9,20,0.12) 0%, transparent 70%)`, pointerEvents: "none" }} />
+            <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 300, height: 300, background: `radial-gradient(circle, rgba(226,56,44,0.1) 0%, transparent 70%)`, pointerEvents: "none" }} />
             <div style={{ position: "relative" }}>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: G.greyText, marginBottom: 12 }}>Your Art Value</div>
-              <div style={{ fontFamily: "'Bebas Neue'", fontSize: "clamp(52px, 14vw, 80px)", color: G.red, lineHeight: 1, letterSpacing: "0.02em", animation: "countUp 0.6s cubic-bezier(0.22,1,0.36,1) 0.3s both", textShadow: `0 0 40px ${G.redGlow}` }}>
+              <div style={{ fontFamily: "'Bebas Neue'", fontSize: "clamp(52px, 14vw, 80px)", color: G.red, lineHeight: 1, letterSpacing: "0.02em", animation: "countUp 0.6s cubic-bezier(0.22,1,0.36,1) 0.3s both" }}>
                 {fmt(result.final_price)}
               </div>
               <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 18 }}>
@@ -458,19 +473,19 @@ export default function ArtValueCalculator() {
                 <div style={{ width: 1, background: G.greyMid }} />
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 10, color: G.greyText, textTransform: "uppercase", letterSpacing: "0.1em" }}>Value Added</div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "#4CAF50", fontWeight: 600 }}>+{fmt(result.final_price - result.base_price)}</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: "#1f9d61", fontWeight: 600 }}>+{fmt(result.final_price - result.base_price)}</div>
                 </div>
                 <div style={{ width: 1, background: G.greyMid }} />
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 10, color: G.greyText, textTransform: "uppercase", letterSpacing: "0.1em" }}>Multiplier</div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: G.white, fontWeight: 600 }}>{result.base_price > 0 ? (result.final_price / result.base_price).toFixed(1) : "—"}×</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, color: G.ink, fontWeight: 600 }}>{result.base_price > 0 ? (result.final_price / result.base_price).toFixed(1) : "—"}×</div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Breakdown Card */}
-          <div className="fade-up-3" style={{ background: G.grey, borderRadius: 20, padding: "24px 24px", marginBottom: 20, border: `1px solid ${G.greyMid}` }}>
+          <div className="fade-up-3" style={{ background: G.grey, borderRadius: 20, padding: "24px 24px", marginBottom: 20, border: `1px solid ${G.greyMid}`, boxShadow: "0 10px 30px rgba(15,15,17,0.05)" }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", textTransform: "uppercase", color: G.red, marginBottom: 20 }}>Value Breakdown</div>
             {[
               { label: "Base Price (time + materials)", value: result.breakdown.base },
@@ -496,8 +511,8 @@ export default function ArtValueCalculator() {
         {/* Action buttons */}
         <div className="fade-up-4" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 20 }}>
           <button onClick={handleShare}
-            style={{ background: G.grey, border: `1px solid ${G.greyMid}`, borderRadius: 12, padding: "14px", color: G.white, fontSize: 14, fontWeight: 700, fontFamily: "'Syne', sans-serif", cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = G.red; e.currentTarget.style.background = `rgba(229,9,20,0.08)`; }}
+            style={{ background: G.grey, border: `1px solid ${G.greyMid}`, borderRadius: 12, padding: "14px", color: G.ink, fontSize: 14, fontWeight: 700, fontFamily: "'Syne', sans-serif", cursor: "pointer", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = G.red; e.currentTarget.style.background = `rgba(226,56,44,0.08)`; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = G.greyMid; e.currentTarget.style.background = G.grey; }}>
             ↗ Share Value
           </button>
@@ -522,7 +537,7 @@ export default function ArtValueCalculator() {
 
   // ── HISTORY ──
   if (screen === "history") return (
-    <div style={{ minHeight: "100vh", background: G.bg, padding: "30px 16px 60px" }}>
+    <div style={{ minHeight: "100vh", ...PAGE_BG, padding: "30px 16px 60px" }}>
       <style>{globalStyles}</style>
       <div style={{ maxWidth: 680, margin: "0 auto" }}>
         <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 36 }}>
@@ -546,7 +561,7 @@ export default function ArtValueCalculator() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {history.map((item, i) => (
-              <div key={item.id} className="fade-up" style={{ background: G.grey, borderRadius: 16, padding: "20px 22px", border: `1px solid ${G.greyMid}`, transition: "border-color 0.2s", animationDelay: `${i * 0.05}s`, cursor: "pointer" }}
+              <div key={item.id} className="fade-up" style={{ background: G.grey, borderRadius: 16, padding: "20px 22px", border: `1px solid ${G.greyMid}`, boxShadow: "0 8px 24px rgba(15,15,17,0.04)", transition: "border-color 0.2s", animationDelay: `${i * 0.05}s`, cursor: "pointer" }}
                 onClick={() => { setResult(item); setScreen("result"); }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = G.red}
                 onMouseLeave={e => e.currentTarget.style.borderColor = G.greyMid}>
